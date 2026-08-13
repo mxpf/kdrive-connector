@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kdrive": {
+      "title": "kDrive",
+      "description": "Safely search, read, create, upload, rename, move, overwrite, and trash files in Infomaniak kDrive.",
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./dist/server.js"
+      ]
+    }
+  }
+}

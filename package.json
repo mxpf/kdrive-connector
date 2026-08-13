@@ -1,0 +1,30 @@
+{
+  "name": "kdrive-connector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private MCP connector for safe read/write access to Infomaniak kDrive.",
+  "type": "module",
+  "bin": {
+    "kdrive-auth": "./dist/auth-cli.js",
+    "kdrive-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "auth": "npm run build --silent && node dist/auth-cli.js",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
