@@ -3,14 +3,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { loadConfig, requireDriveId } from "./config.js";
-import { FileTokenStore, TokenProvider } from "./token-store.js";
+import { FileTokenStore, readAccessTokenFromKeychain, TokenProvider } from "./token-store.js";
 import { KDriveClient } from "./kdrive-client.js";
 import { prepareConfirmation, requireConfirmation, validateName, type SensitiveAction } from "./safety.js";
 
 const config = loadConfig();
 const tokenStore = new FileTokenStore(config.tokenFile);
+const accessToken = config.accessToken ?? readAccessTokenFromKeychain();
 const tokenProvider = new TokenProvider({
-  accessToken: config.accessToken,
+  accessToken,
   clientId: config.clientId,
   clientSecret: config.clientSecret,
   tokenUrl: config.tokenUrl,
@@ -49,7 +50,7 @@ server.registerTool(
   },
   async () => tool(async () => {
     const token = await tokenStore.read();
-    const authentication = config.accessToken ? "environment access token" : token ? "OAuth token store" : "not authenticated";
+    const authentication = accessToken ? "API access token" : token ? "OAuth token store" : "not authenticated";
     if (!config.driveId) {
       return { connected: false, authentication, tokenFile: config.tokenFile, missing: ["INFOMANIAK_DRIVE_ID"] };
     }

@@ -4,6 +4,8 @@ import path from "node:path";
 import { AuthenticationError } from "./errors.js";
 
 const KEYCHAIN_SERVICE = "kdrive-connector.oauth";
+const API_TOKEN_KEYCHAIN_SERVICE = "kdrive-connector.api-token";
+const API_TOKEN_KEYCHAIN_ACCOUNT = "runtime";
 
 export interface TokenRecord {
   access_token: string;
@@ -60,6 +62,49 @@ export function readClientSecretFromKeychain(clientId: string): string | undefin
     return execFileSync(
       "security",
       ["find-generic-password", "-a", clientId, "-s", KEYCHAIN_SERVICE, "-w"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveAccessTokenToKeychain(accessToken: string): boolean {
+  if (process.platform !== "darwin") return false;
+  try {
+    execFileSync(
+      "security",
+      [
+        "add-generic-password",
+        "-U",
+        "-a",
+        API_TOKEN_KEYCHAIN_ACCOUNT,
+        "-s",
+        API_TOKEN_KEYCHAIN_SERVICE,
+        "-w",
+        accessToken,
+      ],
+      { stdio: "ignore" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function readAccessTokenFromKeychain(): string | undefined {
+  if (process.platform !== "darwin") return undefined;
+  try {
+    return execFileSync(
+      "security",
+      [
+        "find-generic-password",
+        "-a",
+        API_TOKEN_KEYCHAIN_ACCOUNT,
+        "-s",
+        API_TOKEN_KEYCHAIN_SERVICE,
+        "-w",
+      ],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     ).trim();
   } catch {

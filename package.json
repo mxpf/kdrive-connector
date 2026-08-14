@@ -6,13 +6,15 @@
   "type": "module",
   "bin": {
     "kdrive-auth": "./dist/auth-cli.js",
+    "kdrive-token": "./dist/token-cli.js",
     "kdrive-mcp": "./dist/server.js"
   },
   "scripts": {
-    "auth": "npm run build --silent && node dist/auth-cli.js",
+    "auth": "npm run build --silent && node --env-file=.env dist/auth-cli.js",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "start": "node dist/server.js",
+    "start": "node --env-file=.env dist/server.js",
+    "token:save": "npm run build --silent && node --env-file=.env dist/token-cli.js",
     "test": "node --import tsx --test test/*.test.ts"
   },
   "engines": {

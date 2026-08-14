@@ -2,7 +2,10 @@
 
 A private MCP plugin that gives ChatGPT Work and Codex safety-first read/write access to Infomaniak kDrive.
 
-The connector uses Infomaniak's documented OAuth 2 authorization-code flow and kDrive REST API. It does not send file contents to a second AI service. The host model decides which tool to call; this server performs exact API operations.
+The connector uses Infomaniak's documented API-token or OAuth 2 authentication
+and the kDrive REST API. It does not send file contents to a second AI service.
+The host model decides which tool to call; this server performs exact API
+operations.
 
 ## Included tools
 
@@ -26,9 +29,35 @@ npm test
 
 Node.js 20 or newer is required.
 
-## 2. Register an Infomaniak OAuth application
+## 2. Configure the drive
 
-Create an OAuth application in Infomaniak Manager and register this redirect URI exactly:
+Copy the example configuration and set the numeric drive ID shown in the kDrive
+browser URL:
+
+```bash
+cp .env.example .env
+```
+
+The local `.env` is ignored by Git and is loaded automatically by the MCP
+server.
+
+## 3. Authenticate with an API token
+
+Create a token in Infomaniak Manager with only the `drive` scope. Copy it, then
+pipe it into the setup command so it is never present in shell history:
+
+```bash
+pbpaste | npm run token:save
+```
+
+On macOS, the token is stored in Keychain. On other platforms, it is stored in
+the same user-only configuration directory as OAuth tokens. It is never written
+to this project.
+
+## Optional: OAuth application flow
+
+OAuth is available for Infomaniak applications that have been authorised to
+request the required kDrive product scope. Register this redirect URI exactly:
 
 ```text
 http://127.0.0.1:53682/callback
@@ -36,27 +65,19 @@ http://127.0.0.1:53682/callback
 
 Infomaniak documents the authorization endpoint as `https://login.infomaniak.com/authorize`, the token endpoint as `https://login.infomaniak.com/token`, and the kDrive product scope as `drive`.
 
-## 3. Authenticate
-
-Set the application credentials only for the setup command:
+Set the application credentials in the ignored `.env`, then authenticate:
 
 ```bash
-export INFOMANIAK_CLIENT_ID="..."
-export INFOMANIAK_CLIENT_SECRET="..."
-export INFOMANIAK_DRIVE_ID="..."
 npm run auth
 ```
 
 The browser opens Infomaniak's consent screen. Tokens are saved in a user-only file outside this repository. On macOS, the client secret is stored in Keychain for refreshes. It is never written to this project.
-
-As an alternative for a personal proof of concept, set `INFOMANIAK_ACCESS_TOKEN` to a manually generated, appropriately scoped Infomaniak API token and skip `npm run auth`.
 
 The numeric drive ID appears after `/drive/` in the kDrive browser URL.
 
 ## 4. Run locally
 
 ```bash
-export INFOMANIAK_DRIVE_ID="..."
 npm start
 ```
 
@@ -79,4 +100,6 @@ npm test
 npm run build
 ```
 
-The automated tests use local mock HTTP responses. Live kDrive calls require your OAuth credentials and are intentionally not run during the normal test suite.
+The automated tests use local mock HTTP responses. Live kDrive calls require
+your Infomaniak credentials and are intentionally not run during the normal
+test suite.
