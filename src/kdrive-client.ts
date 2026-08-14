@@ -34,7 +34,7 @@ export interface CursorPage<T> {
 interface ApiEnvelope<T> {
   result: "success" | "error" | "asynchronous";
   data?: T;
-  cursor?: string;
+  cursor?: string | null;
   has_more?: boolean;
   response_at?: number;
   error?: {
@@ -195,7 +195,7 @@ export class KDriveClient {
     });
     return {
       data: response.data ?? [],
-      cursor: response.cursor,
+      cursor: response.cursor ?? undefined,
       has_more: response.has_more,
       response_at: response.response_at,
     };
@@ -257,7 +257,7 @@ export class KDriveClient {
     });
     return {
       data: response.data ?? [],
-      cursor: response.cursor,
+      cursor: response.cursor ?? undefined,
       has_more: response.has_more,
       response_at: response.response_at,
     };

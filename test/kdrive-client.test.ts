@@ -28,6 +28,22 @@ test("directory listing sends bearer auth and documented pagination parameters",
   assert.equal(page.data[0]?.name, "Notes");
 });
 
+test("directory and search pagination omit a null terminal cursor", async () => {
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    return Response.json({
+      result: "success",
+      data: url.pathname.endsWith("/search") ? [] : [{ id: 7, name: "Notes", type: "dir" }],
+      cursor: null,
+      has_more: false,
+    });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+
+  assert.equal((await client.listDirectory(123, 1)).cursor, undefined);
+  assert.equal((await client.search(123, "invoice")).cursor, undefined);
+});
+
 test("platform fetch is called without the KDriveClient as its receiver", async () => {
   let seenReceiver: unknown = Symbol("not called");
   const receiverAwareFetch = async function (this: unknown) {
