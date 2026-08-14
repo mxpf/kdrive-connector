@@ -24,6 +24,5 @@
     "brandColor": "#0098FF",
     "composerIcon": "./assets/kdrive-connector-icon.png",
     "logo": "./assets/kdrive-connector-logo.png"
-  },
-  "mcpServers": "./.mcp.json"
+  }
 }
