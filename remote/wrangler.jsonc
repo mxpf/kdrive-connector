@@ -1,0 +1,55 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kdrive-connector-mcp",
+  "main": "src/index.ts",
+  "assets": {
+    "directory": "./public"
+  },
+  "compatibility_date": "2025-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  /**
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 * 
+	 * Commands to set secrets:
+   * npx wrangler secret put GITHUB_CLIENT_ID
+   * npx wrangler secret put GITHUB_CLIENT_SECRET
+   * npx wrangler secret put COOKIE_ENCRYPTION_KEY
+   * npx wrangler secret put KDRIVE_ACCESS_TOKEN
+   */
+  "vars": {
+    "ALLOWED_GITHUB_LOGIN": "mxpf",
+    "KDRIVE_MAX_READ_BYTES": "2097152",
+    "KDRIVE_MAX_UPLOAD_BYTES": "10485760"
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["KDriveMCP"],
+      "tag": "v1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "KDriveMCP",
+        "name": "MCP_OBJECT"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "161a2f4016044bd689ce566cbf935116"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "port": 8788
+  }
+}

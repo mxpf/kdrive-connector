@@ -1,6 +1,11 @@
 # kDrive Connector
 
-A private MCP plugin that gives ChatGPT Work and Codex safety-first read/write access to Infomaniak kDrive.
+<p align="center">
+  <img src="assets/kdrive-connector-logo.png" width="240" alt="kDrive Connector logo">
+</p>
+
+A safety-first Model Context Protocol connector that gives ChatGPT Work, Codex,
+and other MCP clients controlled read/write access to Infomaniak kDrive.
 
 The connector uses Infomaniak's documented API-token or OAuth 2 authentication
 and the kDrive REST API. It does not send file contents to a second AI service.
@@ -19,7 +24,30 @@ operations.
 
 Rename, move, overwrite, and trash require an exact, target-bound confirmation phrase returned by `kdrive_prepare_sensitive_change`. MCP destructive-action annotations provide an additional host approval boundary. Permanent deletion and empty-trash operations are deliberately not exposed.
 
-## 1. Install dependencies and build
+## Architecture
+
+The repository contains two runtimes built on the same kDrive client and safety
+rules:
+
+- The root package is a local stdio MCP server. It reads its Infomaniak token
+  from macOS Keychain or a user-only token file.
+- [`remote/`](remote/) is an OAuth 2.1-protected Streamable HTTP server on
+  Cloudflare Workers. GitHub verifies the connecting user, an allowlist limits
+  access to the owner, and the Infomaniak token stays in Cloudflare's encrypted
+  secret store.
+
+```text
+ChatGPT Work ── MCP OAuth 2.1 ──> Cloudflare Worker ── server-side token ──> kDrive API
+                                      │
+                                      └── GitHub login + owner allowlist
+```
+
+No kDrive credential is sent to ChatGPT or committed to Git. The host model
+decides which tool to call; the server performs exact API operations.
+
+## Local runtime
+
+### 1. Install dependencies and build
 
 ```bash
 npm install
@@ -29,7 +57,7 @@ npm test
 
 Node.js 20 or newer is required.
 
-## 2. Configure the drive
+### 2. Configure the drive
 
 Copy the example configuration and set the numeric drive ID shown in the kDrive
 browser URL:
@@ -41,7 +69,7 @@ cp .env.example .env
 The local `.env` is ignored by Git and is loaded automatically by the MCP
 server.
 
-## 3. Authenticate with an API token
+### 3. Authenticate with an API token
 
 Create a token in Infomaniak Manager with only the `drive` scope. Copy it, then
 pipe it into the setup command so it is never present in shell history:
@@ -54,7 +82,7 @@ On macOS, the token is stored in Keychain. On other platforms, it is stored in
 the same user-only configuration directory as OAuth tokens. It is never written
 to this project.
 
-## Optional: OAuth application flow
+### Optional: Infomaniak OAuth application flow
 
 OAuth is available for Infomaniak applications that have been authorised to
 request the required kDrive product scope. Register this redirect URI exactly:
@@ -75,13 +103,20 @@ The browser opens Infomaniak's consent screen. Tokens are saved in a user-only f
 
 The numeric drive ID appears after `/drive/` in the kDrive browser URL.
 
-## 4. Run locally
+### 4. Run locally
 
 ```bash
 npm start
 ```
 
 The plugin manifest points to `dist/server.js` through `.mcp.json`. Build before installing or opening it in ChatGPT/Codex.
+
+## Remote runtime for ChatGPT Work
+
+The remote server exposes Streamable HTTP at `/mcp` and implements OAuth
+discovery, dynamic client registration, PKCE, bearer-token validation, and
+GitHub identity verification. See [`remote/README.md`](remote/README.md) for the
+deployment and ChatGPT connection guide.
 
 ## Safety behavior
 
@@ -98,6 +133,7 @@ The plugin manifest points to `dist/server.js` through `.mcp.json`. Build before
 npm run check
 npm test
 npm run build
+cd remote && npm ci && npm run type-check
 ```
 
 The automated tests use local mock HTTP responses. Live kDrive calls require

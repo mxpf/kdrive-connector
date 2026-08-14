@@ -1,0 +1,5 @@
+GITHUB_CLIENT_ID=replace_me
+GITHUB_CLIENT_SECRET=replace_me
+COOKIE_ENCRYPTION_KEY=replace_me
+KDRIVE_ACCESS_TOKEN=replace_me
+KDRIVE_DRIVE_ID=replace_me
