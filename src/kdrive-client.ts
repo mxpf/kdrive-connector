@@ -285,11 +285,23 @@ export class KDriveClient {
     }
 
     try {
-      return { ...await this.download(driveId, fileId, { convertAs: "text" }), textSource: "converted" };
-    } catch (conversionError) {
-      const raw = await this.download(driveId, fileId);
-      if (!isTextContentType(raw.contentType)) throw conversionError;
-      return { ...raw, textSource: "raw" };
+      const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/preview`, {
+        query: { as: "text" },
+        headers: { accept: "*/*" },
+      });
+      return {
+        bytes: new Uint8Array(await response.arrayBuffer()),
+        contentType: response.headers.get("content-type") ?? "text/plain",
+        textSource: "converted",
+      };
+    } catch (previewError) {
+      try {
+        return { ...await this.download(driveId, fileId, { convertAs: "text" }), textSource: "converted" };
+      } catch {
+        const raw = await this.download(driveId, fileId);
+        if (!isTextContentType(raw.contentType)) throw previewError;
+        return { ...raw, textSource: "raw" };
+      }
     }
   }
 

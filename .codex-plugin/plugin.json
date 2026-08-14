@@ -1,22 +1,23 @@
 {
   "name": "kdrive-connector",
-  "version": "0.2.0",
-  "description": "Natural, path-first read/write access to Infomaniak kDrive.",
+  "version": "0.3.0",
+  "description": "Seamless path-first search, preview, and safe read/write access to Infomaniak kDrive.",
   "author": {
     "name": "Max Pfennighaus"
   },
   "repository": "https://github.com/mxpf/kdrive-connector",
   "keywords": ["kdrive", "infomaniak", "files", "storage", "mcp"],
   "skills": "./skills/",
+  "apps": "./.app.json",
   "interface": {
     "displayName": "kDrive Connector",
-    "shortDescription": "Find, read, save, and organize kDrive files.",
-    "longDescription": "Work naturally with Infomaniak kDrive from ChatGPT and Codex. Find and read files by name or path, save finished work, and safely organize or update existing items.",
+    "shortDescription": "Find, preview, open, save, and organize kDrive files.",
+    "longDescription": "Work naturally with Infomaniak kDrive from ChatGPT and Codex. Search files by ordinary words or paths, see useful previews and private Open in kDrive links, save finished work, and safely organize or update existing items with native approvals.",
     "developerName": "Max Pfennighaus",
     "category": "Productivity",
-    "capabilities": ["Search", "Read", "Write"],
+    "capabilities": ["Search", "Preview", "Read", "Write"],
     "defaultPrompt": [
-      "Find my latest invoice in kDrive.",
+      "Find my latest invoice in kDrive and preview it.",
       "Summarize the document in /Private/Projects.",
       "Save this finished document to my kDrive."
     ],

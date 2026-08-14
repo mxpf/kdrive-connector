@@ -16,13 +16,13 @@ operations.
 
 - Check the selected drive connection
 - Browse folders and retrieve file details by natural path
-- Search filenames and supported document content
+- Search filenames and supported document content with short previews and private Open in kDrive links
 - Read files as converted text or base64
 - Create folders and upload new files without overwriting existing names
-- Rename, move, overwrite, and trash items through the host's normal approval flow
+- Rename, move, overwrite, and trash items through one normal host approval
 - Restore recoverable items from trash
 
-The connector accepts paths such as `/Private/Projects/brief.docx`, keeps IDs and ETags behind the scenes, and uses MCP write/destructive annotations so the host can provide its normal approval boundary. Permanent deletion and empty-trash operations are deliberately not exposed.
+The connector accepts paths such as `/Private/Projects/brief.docx`; its public tool schemas contain no file IDs, folder IDs, or ETags. Sensitive changes use short-lived, one-use signed operation tokens bound to the resolved target, requested action, current file version, and exact replacement content when applicable. The token exchange stays internal while the host presents one ordinary approval. Permanent deletion and empty-trash operations are deliberately not exposed.
 
 ## Architecture
 
@@ -122,13 +122,15 @@ deployment and ChatGPT connection guide.
 
 - Read/search tools run directly.
 - New folders and new-file uploads are non-destructive writes and never overwrite on name conflict.
-- Writes use MCP annotations so ChatGPT or another host can show its native approval UI when appropriate.
+- Writes use MCP annotations so ChatGPT or another host can show its native approval UI. The recommended app permission is **Allow read actions**, which asks once before each write.
 - Rename and move resolve exact paths and fail safely on name conflicts.
-- Overwrite fetches and enforces the current ETag immediately before upload, preventing a concurrent stale write.
-- Trash is recoverable; permanent-delete API operations are not available.
+- Rename, move, overwrite, and trash require a short-lived one-use operation token that binds the target and readable arguments. The model prepares and supplies it internally; the user never copies a phrase or token.
+- Overwrite binds and enforces the current file version and an exact digest of the replacement bytes, preventing a stale or substituted write.
+- Trash is recoverable through an opaque undo token; permanent-delete API operations are not available.
+- Results contain private, expiring Open in kDrive redirect links instead of public share links. Search adds bounded text previews when conversion is supported and a concise type/size preview otherwise.
 - Reads default to 2 MiB and uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`.
 
-The included `manage-kdrive-files` skill teaches compatible hosts to prefer paths, keep connector internals out of normal conversation, and report concise outcomes. If a user asks only to preview a change, the skill prevents the write tool from running.
+The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The packaged `.app.json` maps that skill to the registered remote connector. If a user asks only to preview a change, the skill prevents both prepare and write tools from running.
 
 ## Development checks
 

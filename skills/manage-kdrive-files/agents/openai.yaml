@@ -1,7 +1,7 @@
 interface:
   display_name: "Work with kDrive Files"
-  short_description: "Find, read, save, and organize kDrive files"
-  default_prompt: "Use $manage-kdrive-files to find and summarize my latest invoice."
+  short_description: "Find, preview, open, save, and safely organize kDrive files"
+  default_prompt: "Use $manage-kdrive-files to find my latest invoice in kDrive, show a preview, and link to it."
 dependencies:
   tools:
     - type: "mcp"

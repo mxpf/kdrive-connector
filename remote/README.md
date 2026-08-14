@@ -12,8 +12,10 @@ other remote MCP clients.
 - The GitHub access token is used only to fetch that username and is then
   discarded; it is not embedded in the MCP token.
 - The Infomaniak API token and drive ID are Cloudflare Worker secrets.
-- Tools use MCP read/write and destructive annotations for the host's native approval boundary.
-- Paths are resolved server-side, and overwrite requests enforce the file's current ETag.
+- Public tools accept paths and filenames; file IDs, folder IDs, and ETags stay server-side.
+- Tools use MCP read/write and destructive annotations for one native host approval per write.
+- Rename, move, overwrite, and trash require short-lived, one-use signed operation tokens stored in the MCP session's Durable Object database.
+- Open in kDrive results use expiring signed redirect links, so tool output does not expose internal IDs or create public shares.
 - Permanent deletion is not exposed.
 
 ## Deploy
@@ -44,11 +46,14 @@ npx wrangler secret put GITHUB_CLIENT_SECRET
 npx wrangler secret put COOKIE_ENCRYPTION_KEY
 npx wrangler secret put KDRIVE_ACCESS_TOKEN
 npx wrangler secret put KDRIVE_DRIVE_ID
+npx wrangler secret put KDRIVE_OPERATION_SECRET
 npm run deploy
 ```
 
-`COOKIE_ENCRYPTION_KEY` should be a new random value such as the output of
-`openssl rand -hex 32`. The Infomaniak token should have only the `drive` scope.
+`COOKIE_ENCRYPTION_KEY` and `KDRIVE_OPERATION_SECRET` should each be independent
+random values such as the output of `openssl rand -hex 32`. The Infomaniak token
+should have only the `drive` scope. Set `KDRIVE_CONNECTOR_BASE_URL` in
+`wrangler.jsonc` to the Worker's public origin.
 
 ## Verify
 
@@ -78,6 +83,8 @@ OAuth metadata is published at:
 4. Review the discovered tools before enabling the connection. After an update,
    scan or refresh the tools so ChatGPT receives the latest path-first schemas
    and server instructions.
+5. Set the plugin permission to **Allow read actions** so searches and reads are
+   seamless while every write receives one ordinary approval.
 
 Never put `.dev.vars`, API tokens, OAuth client secrets, or cookie encryption
 keys in Git. The included `.gitignore` excludes local secret files.

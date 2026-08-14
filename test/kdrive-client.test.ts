@@ -66,6 +66,30 @@ test("plain text reads use raw bytes instead of the document converter", async (
   assert.equal(seenUrls.some((url) => url.includes("as=text")), false);
 });
 
+test("document text reads use kDrive's documented preview conversion endpoint", async () => {
+  const seenUrls: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    seenUrls.push(url);
+    if (url.includes("/files/45/preview")) {
+      return new Response("converted document", { status: 200, headers: { "content-type": "text/plain" } });
+    }
+    return Response.json({
+      result: "success",
+      data: { id: 45, name: "report.docx", type: "file", mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    });
+  };
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const result = await client.downloadText(123, 45);
+
+  assert.equal(new TextDecoder().decode(result.bytes), "converted document");
+  assert.equal(result.textSource, "converted");
+  const previewUrl = new URL(seenUrls.find((url) => url.includes("/preview"))!);
+  assert.equal(previewUrl.pathname, "/2/drive/123/files/45/preview");
+  assert.equal(previewUrl.searchParams.get("as"), "text");
+});
+
 test("new uploads default to a conflict-safe request shape", async () => {
   let seenUrl = "";
   let seenBody = "";

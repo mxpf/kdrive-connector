@@ -5,6 +5,7 @@ import { loadConfig, requireDriveId } from "./config.js";
 import { KDriveClient } from "./kdrive-client.js";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "./kdrive-instructions.js";
 import { registerKDriveTools } from "./kdrive-tools.js";
+import { generateOperationSecret, MemoryOperationNonceStore } from "./operation-token.js";
 import { FileTokenStore, readAccessTokenFromKeychain, TokenProvider } from "./token-store.js";
 
 const config = loadConfig();
@@ -21,7 +22,7 @@ const tokenProvider = new TokenProvider({
 const client = new KDriveClient(config, tokenProvider);
 const driveId = requireDriveId(config);
 const server = new McpServer(
-  { name: "kdrive-connector", version: "0.2.0" },
+  { name: "kdrive-connector", version: "0.3.0" },
   { instructions: KDRIVE_SERVER_INSTRUCTIONS },
 );
 
@@ -29,10 +30,25 @@ registerKDriveTools(server, client, {
   driveId,
   maxReadBytes: config.maxReadBytes,
   maxUploadBytes: config.maxUploadBytes,
+  operationSecret: generateOperationSecret(),
+  nonceStore: new MemoryOperationNonceStore(),
+  buildOpenUrl: (file) => `https://ksuite.infomaniak.com/all/kdrive/app/drive/${driveId}/files/${file.id}`,
   connectionStatus: async () => {
     const token = await tokenStore.read();
     const authentication = accessToken ? "API access token" : token ? "OAuth token store" : "not authenticated";
-    return { connected: true, authentication, drive: await client.getDrive(driveId) };
+    const drive = await client.getDrive(driveId);
+    return {
+      connected: true,
+      authentication,
+      drive: {
+        name: drive.name,
+        status: drive.status,
+        role: drive.role,
+        size: drive.size,
+        usedSize: drive.used_size,
+        quota: drive.quota,
+      },
+    };
   },
 });
 

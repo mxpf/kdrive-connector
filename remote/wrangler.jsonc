@@ -20,10 +20,12 @@
    * npx wrangler secret put GITHUB_CLIENT_SECRET
    * npx wrangler secret put COOKIE_ENCRYPTION_KEY
    * npx wrangler secret put KDRIVE_ACCESS_TOKEN
+	 * npx wrangler secret put KDRIVE_OPERATION_SECRET
    */
   "vars": {
-    "ALLOWED_GITHUB_LOGIN": "mxpf",
-    "KDRIVE_MAX_READ_BYTES": "2097152",
+		"ALLOWED_GITHUB_LOGIN": "mxpf",
+		"KDRIVE_CONNECTOR_BASE_URL": "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
+		"KDRIVE_MAX_READ_BYTES": "2097152",
     "KDRIVE_MAX_UPLOAD_BYTES": "10485760"
   },
   "migrations": [

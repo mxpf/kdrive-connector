@@ -2,6 +2,7 @@ import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provid
 import { Hono } from "hono";
 import { Octokit } from "octokit";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
+import { assertOpenPayload, verifyKDrivePayload } from "../../src/operation-token.js";
 import {
 	addApprovedClient,
 	bindStateToSession,
@@ -15,6 +16,25 @@ import {
 } from "./workers-oauth-utils";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
+
+app.get("/open/:token", async (c) => {
+	try {
+		const payload = await verifyKDrivePayload(c.env.KDRIVE_OPERATION_SECRET, c.req.param("token"));
+		assertOpenPayload(payload);
+		if (String(payload.driveId) !== c.env.KDRIVE_DRIVE_ID) return c.text("This kDrive link is not valid here.", 403);
+		const target = `https://ksuite.infomaniak.com/all/kdrive/app/drive/${payload.driveId}/files/${payload.fileId}`;
+		return new Response(null, {
+			status: 302,
+			headers: {
+				location: target,
+				"cache-control": "no-store",
+				"referrer-policy": "no-referrer",
+			},
+		});
+	} catch {
+		return c.text("This Open in kDrive link is invalid or expired.", 410);
+	}
+});
 
 app.get("/authorize", async (c) => {
 	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
