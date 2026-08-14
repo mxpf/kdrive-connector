@@ -44,6 +44,28 @@ test("platform fetch is called without the KDriveClient as its receiver", async 
   assert.equal(seenReceiver, undefined);
 });
 
+test("plain text reads use raw bytes instead of the document converter", async () => {
+  const seenUrls: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    seenUrls.push(url);
+    if (url.includes("/files/44/download")) {
+      return new Response("plain text", { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
+    return new Response(JSON.stringify({
+      result: "success",
+      data: { id: 44, name: "note.txt", type: "file", mime_type: "text/plain" },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const result = await client.downloadText(123, 44);
+
+  assert.equal(new TextDecoder().decode(result.bytes), "plain text");
+  assert.equal(result.textSource, "raw");
+  assert.equal(seenUrls.some((url) => url.includes("as=text")), false);
+});
+
 test("new uploads default to a conflict-safe request shape", async () => {
   let seenUrl = "";
   let seenBody = "";

@@ -95,12 +95,14 @@ export function registerKDriveTools(server: McpServer, client: KDriveClient, con
 		"kdrive_read_file",
 		{
 			title: "Read a kDrive file",
-			description: "Download a file as converted text or as base64. Responses are capped by the connector's configured read limit.",
+			description: "Read native text directly, convert supported documents to text, or return base64. Responses are capped by the connector's configured read limit.",
 			inputSchema: { fileId: positiveId, mode: z.enum(["text", "base64"]).default("text") },
 			annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
 		},
 		async ({ fileId, mode }) => tool(async () => {
-			const result = await client.download(config.driveId, fileId, mode === "text" ? { convertAs: "text" } : {});
+			const result = mode === "text"
+				? await client.downloadText(config.driveId, fileId)
+				: await client.download(config.driveId, fileId);
 			if (result.bytes.byteLength > config.maxReadBytes) {
 				throw new Error(`File is ${result.bytes.byteLength} bytes; the read limit is ${config.maxReadBytes} bytes.`);
 			}
@@ -109,6 +111,7 @@ export function registerKDriveTools(server: McpServer, client: KDriveClient, con
 				contentType: result.contentType,
 				byteLength: result.bytes.byteLength,
 				encoding: mode === "text" ? "utf8" : "base64",
+				...(mode === "text" && "textSource" in result ? { textSource: result.textSource } : {}),
 				content: mode === "text" ? new TextDecoder().decode(result.bytes) : Buffer.from(result.bytes).toString("base64"),
 			};
 		}),

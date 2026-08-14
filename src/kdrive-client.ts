@@ -53,6 +53,26 @@ interface RequestOptions {
   body?: Uint8Array;
 }
 
+export interface DownloadResult {
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+export interface TextDownloadResult extends DownloadResult {
+  textSource: "raw" | "converted";
+}
+
+function isTextContentType(contentType: string | undefined): boolean {
+  const mimeType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (!mimeType) return false;
+  return mimeType.startsWith("text/")
+    || mimeType === "application/json"
+    || mimeType === "application/javascript"
+    || mimeType === "application/xml"
+    || mimeType.endsWith("+json")
+    || mimeType.endsWith("+xml");
+}
+
 export class KDriveClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -193,7 +213,7 @@ export class KDriveClient {
     driveId: number,
     fileId: number,
     options: { convertAs?: "text" | "pdf" } = {},
-  ): Promise<{ bytes: Uint8Array; contentType: string }> {
+  ): Promise<DownloadResult> {
     const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/download`, {
       query: { as: options.convertAs },
       headers: { accept: "*/*" },
@@ -202,6 +222,21 @@ export class KDriveClient {
       bytes: new Uint8Array(await response.arrayBuffer()),
       contentType: response.headers.get("content-type") ?? "application/octet-stream",
     };
+  }
+
+  async downloadText(driveId: number, fileId: number): Promise<TextDownloadResult> {
+    const file = await this.getFile(driveId, fileId);
+    if (isTextContentType(file.mime_type)) {
+      return { ...await this.download(driveId, fileId), textSource: "raw" };
+    }
+
+    try {
+      return { ...await this.download(driveId, fileId, { convertAs: "text" }), textSource: "converted" };
+    } catch (conversionError) {
+      const raw = await this.download(driveId, fileId);
+      if (!isTextContentType(raw.contentType)) throw conversionError;
+      return { ...raw, textSource: "raw" };
+    }
   }
 
   async createDirectory(driveId: number, parentId: number, name: string, color?: string): Promise<KDriveFile> {
