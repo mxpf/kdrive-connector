@@ -12,6 +12,29 @@ and the kDrive REST API. It does not send file contents to a second AI service.
 The host model decides which tool to call; this server performs exact API
 operations.
 
+## Why this exists
+
+This project grew out of my interest in diversifying my personal technology
+stack away from an exclusively US-based ecosystem, and especially from making
+Google Drive the default home for every document. Infomaniak is a Swiss
+provider, and kDrive gives me a credible European-hosted file workspace; the
+missing piece was a first-class AI workflow comparable to the integrations
+available for the largest US platforms.
+
+The goal is not to argue that every US service is undesirable. It is to reduce
+vendor and jurisdiction concentration, preserve meaningful provider choice,
+and demonstrate that open protocols can give independent storage platforms an
+equally natural agent experience. MCP is central to that approach: the file
+provider, AI host, authentication layer, and workflow instructions remain
+separable instead of becoming one closed stack.
+
+Using this connector does not by itself create data sovereignty. A file's
+contents are shared with the AI host when the user explicitly asks the host to
+read or process that file. The connector does, however, avoid routing those
+contents through an additional AI service, keeps the kDrive credential out of
+the model, and limits every operation to the tools and permissions described
+below.
+
 ## Included tools
 
 - Check the selected drive connection
@@ -109,7 +132,11 @@ The numeric drive ID appears after `/drive/` in the kDrive browser URL.
 npm start
 ```
 
-The plugin manifest points to `dist/server.js` through `.mcp.json`. Build before installing or opening it in ChatGPT/Codex.
+The repository includes `.mcp.json` for clients that launch the local stdio
+server directly. Build before registering that local server. The packaged
+workflow plugin intentionally uses the authenticated remote connection through
+`.app.json`, so installing it does not copy a local `.env` or token into the
+plugin.
 
 ## Remote runtime for ChatGPT Work
 
@@ -117,6 +144,34 @@ The remote server exposes Streamable HTTP at `/mcp` and implements OAuth
 discovery, dynamic client registration, PKCE, bearer-token validation, and
 GitHub identity verification. See [`remote/README.md`](remote/README.md) for the
 deployment and ChatGPT connection guide.
+
+## Complete ChatGPT and Codex plugin
+
+The repository is also packaged as a complete plugin rather than only an MCP
+server:
+
+- `.codex-plugin/plugin.json` supplies the install identity, discovery copy,
+  capabilities, artwork, and starter prompts.
+- `.app.json` maps the package to the registered authenticated remote connector.
+- `skills/manage-kdrive-files/` supplies the workflow that makes ordinary
+  requests such as “find my latest invoice in kDrive” work without exposing
+  connector internals.
+- `assets/` contains the connector icon and logo used by supported install
+  surfaces.
+
+The combined experience has been tested in a fresh Codex session against the
+deployed OAuth-protected server: the skill selected the connector
+automatically, reused the authenticated account, checked connection health,
+listed the root directory, and returned a private **Open in kDrive** link. No
+file was modified during that smoke test.
+
+For local development, add the plugin directory to a personal or repository
+marketplace, install `kdrive-connector` from the Plugins directory, restart the
+desktop host, and test it in a new conversation. A self-hosted fork should
+replace the app ID in `.app.json` with the technical ID of its own registered
+MCP connection. The current deployment and its GitHub allowlist are owner-only;
+the repository contains the development source, but the deployed connector is
+not yet a universally available hosted kDrive service.
 
 ## Safety behavior
 
