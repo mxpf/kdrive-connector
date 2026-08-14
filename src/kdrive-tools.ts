@@ -23,6 +23,82 @@ import { validateName } from "./safety.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v2.html";
+
+const KDRIVE_RESULTS_UI = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 10px; background: transparent; color: CanvasText; }
+    #root { display: grid; gap: 8px; }
+    .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 12px; }
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+    .path, .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 12px; }
+    button { appearance: none; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 999px; padding: 7px 11px; background: color-mix(in srgb, CanvasText 7%, transparent); color: inherit; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+    button:hover { background: color-mix(in srgb, CanvasText 12%, transparent); }
+    .empty { padding: 12px; color: color-mix(in srgb, CanvasText 68%, transparent); }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="empty">Loading kDrive results…</div></div>
+  <script>
+    const root = document.getElementById("root");
+    function render(output) {
+      const items = Array.isArray(output?.items) ? output.items : [];
+      root.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No kDrive results.";
+        root.append(empty);
+        return;
+      }
+      for (const item of items.slice(0, 10)) {
+        const card = document.createElement("div");
+        card.className = "item";
+        const copy = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = item.name || "kDrive item";
+        copy.append(name);
+        if (item.path) {
+          const path = document.createElement("div");
+          path.className = "path";
+          path.textContent = item.path;
+          copy.append(path);
+        }
+        if (item.preview) {
+          const preview = document.createElement("div");
+          preview.className = "preview";
+          preview.textContent = item.preview;
+          copy.append(preview);
+        }
+        const open = document.createElement("button");
+        open.type = "button";
+        open.textContent = "Open in kDrive";
+        open.addEventListener("click", () => {
+          if (!item.openUrl) return;
+          if (window.openai?.openExternal) window.openai.openExternal({ href: item.openUrl, redirectUrl: false });
+          else window.open(item.openUrl, "_blank", "noopener,noreferrer");
+        });
+        card.append(copy, open);
+        root.append(card);
+      }
+    }
+    if (window.openai?.toolOutput) render(window.openai.toolOutput);
+    window.addEventListener("message", (event) => {
+      if (event.source !== window.parent) return;
+      const message = event.data;
+      if (message?.method === "ui/notifications/tool-result") render(message.params?.structuredContent);
+    }, { passive: true });
+    window.addEventListener("openai:set_globals", () => render(window.openai?.toolOutput), { passive: true });
+  </script>
+</body>
+</html>`.trim();
 
 export interface KDriveToolConfig {
   driveId: number;
@@ -36,8 +112,60 @@ export interface KDriveToolConfig {
   undoTtlMs?: number;
 }
 
+function markdownLabel(value: string): string {
+  return value.replace(/([\\[\]])/g, "\\$1");
+}
+
+interface OpenLink {
+  url: string;
+  name: string;
+  path?: string;
+  mimeType?: string;
+}
+
+function collectOpenLinks(value: unknown, links: OpenLink[] = []): OpenLink[] {
+  if (Array.isArray(value)) {
+    for (const item of value) collectOpenLinks(item, links);
+    return links;
+  }
+  if (!value || typeof value !== "object") return links;
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.openUrl === "string") {
+    links.push({
+      url: record.openUrl,
+      name: typeof record.name === "string" ? record.name : "kDrive item",
+      ...(typeof record.path === "string" ? { path: record.path } : {}),
+      ...(typeof record.mimeType === "string" ? { mimeType: record.mimeType } : {}),
+    });
+  }
+  for (const [key, item] of Object.entries(record)) {
+    if (key !== "openUrl") collectOpenLinks(item, links);
+  }
+  return links;
+}
+
 function jsonContent(value: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
+  const links = [...new Map(collectOpenLinks(value).map((link) => [link.url, link])).values()];
+  const linkSection = links.length > 0
+    ? `\n\nClickable kDrive links (preserve these exact Markdown links in the user-facing response):\n${links.map((link) => `- [${markdownLabel(`Open ${link.name} in kDrive`)}](${link.url})`).join("\n")}`
+    : "";
+  return {
+    structuredContent: value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : { value },
+    content: [
+      { type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` },
+      ...links.map((link) => ({
+        type: "resource_link" as const,
+        uri: link.url,
+        name: link.name,
+        title: `Open ${link.name} in kDrive`,
+        ...(link.path ? { description: link.path } : {}),
+        ...(link.mimeType ? { mimeType: link.mimeType } : {}),
+      })),
+    ],
+  };
 }
 
 function errorContent(error: unknown) {
@@ -175,12 +303,65 @@ const fileType = z.enum([
   "archive", "audio", "code", "diagram", "dir", "email", "file", "font", "form", "image", "model",
   "pdf", "presentation", "spreadsheet", "text", "unknown", "video",
 ]);
+const resultItemSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  type: z.string(),
+  status: z.string().optional(),
+  size: z.number().optional(),
+  mimeType: z.string().optional(),
+  lastModifiedAt: z.number().optional(),
+  openUrl: z.string().url(),
+  preview: z.string().optional(),
+  previewTruncated: z.boolean().optional(),
+});
+const resultsUiMeta = {
+  ui: { resourceUri: KDRIVE_RESULTS_UI_URI, visibility: ["model", "app"] },
+  "openai/outputTemplate": KDRIVE_RESULTS_UI_URI,
+  "openai/widgetAccessible": true,
+  "openai/toolInvocation/invoking": "Searching kDrive…",
+  "openai/toolInvocation/invoked": "kDrive results ready",
+};
 
 export function registerKDriveTools(
   server: Pick<McpServer, "registerTool">,
   client: KDriveClient,
   config: KDriveToolConfig,
 ): void {
+  const resourceServer = server as unknown as {
+    registerResource: (
+      name: string,
+      uri: string,
+      metadata: Record<string, never>,
+      read: () => Promise<Record<string, unknown>>,
+    ) => unknown;
+  };
+  resourceServer.registerResource("kdrive-results", KDRIVE_RESULTS_UI_URI, {}, async () => ({
+    contents: [{
+      uri: KDRIVE_RESULTS_UI_URI,
+      mimeType: "text/html;profile=mcp-app",
+      text: KDRIVE_RESULTS_UI,
+      _meta: {
+        ui: {
+          prefersBorder: true,
+          domain: "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
+          csp: { connectDomains: [], resourceDomains: [] },
+        },
+        "openai/widgetDescription": "A compact list of kDrive files with paths, previews, and Open in kDrive buttons.",
+        "openai/widgetPrefersBorder": true,
+        "openai/widgetDomain": "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
+        "openai/widgetCSP": {
+          connect_domains: [],
+          resource_domains: [],
+          redirect_domains: [
+            "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
+            "https://ksuite.infomaniak.com",
+          ],
+        },
+      },
+    }],
+  }));
+
   server.registerTool(
     "kdrive_connection_status",
     {
@@ -216,6 +397,13 @@ export function registerKDriveTools(
         cursor: z.string().optional(),
         limit: z.number().int().min(5).max(1000).default(100),
       },
+      outputSchema: {
+        folder: z.string(),
+        items: z.array(resultItemSchema),
+        cursor: z.string().optional(),
+        hasMore: z.boolean(),
+      },
+      _meta: resultsUiMeta,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ directoryPath, cursor, limit }) => tool(async () => {
@@ -246,6 +434,14 @@ export function registerKDriveTools(
         cursor: z.string().optional(),
         limit: z.number().int().min(5).max(1000).default(50),
       },
+      outputSchema: {
+        query: z.string(),
+        searchedFolder: z.string(),
+        items: z.array(resultItemSchema),
+        cursor: z.string().optional(),
+        hasMore: z.boolean(),
+      },
+      _meta: resultsUiMeta,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({

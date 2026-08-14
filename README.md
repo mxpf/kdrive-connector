@@ -16,7 +16,7 @@ operations.
 
 - Check the selected drive connection
 - Browse folders and retrieve file details by natural path
-- Search filenames and supported document content with short previews and private Open in kDrive links
+- Search filenames and supported document content with short previews and an inline result card containing private Open in kDrive buttons
 - Read files as converted text or base64
 - Create folders and upload new files without overwriting existing names
 - Rename, move, overwrite, and trash items through one normal host approval
@@ -127,7 +127,7 @@ deployment and ChatGPT connection guide.
 - Rename, move, overwrite, and trash require a short-lived one-use operation token that binds the target and readable arguments. The model prepares and supplies it internally; the user never copies a phrase or token.
 - Overwrite binds and enforces the current file version and an exact digest of the replacement bytes, preventing a stale or substituted write.
 - Trash is recoverable through an opaque undo token; permanent-delete API operations are not available.
-- Results contain private, expiring Open in kDrive redirect links instead of public share links. Search adds bounded text previews when conversion is supported and a concise type/size preview otherwise.
+- Results contain private, expiring Open in kDrive redirect links instead of public share links. Search adds bounded text previews when conversion is supported and a concise type/size preview otherwise. ChatGPT-compatible hosts also receive a native MCP Apps result card with clickable Open in kDrive buttons; structured data, resource links, and Markdown remain available as fallbacks.
 - Reads default to 2 MiB and uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`.
 
 The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The packaged `.app.json` maps that skill to the registered remote connector. If a user asks only to preview a change, the skill prevents both prepare and write tools from running.

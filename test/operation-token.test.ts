@@ -30,8 +30,8 @@ test("signed operation tokens verify and reject tampering or expiry", async () =
   assertOperationPayload(verified, "move", 42);
   assert.equal(verified.sourcePath, "/Private/report.pdf");
 
-  const last = token.at(-1);
-  const tampered = `${token.slice(0, -1)}${last === "A" ? "B" : "A"}`;
+  const [body, signature] = token.split(".");
+  const tampered = `${body}.${signature.startsWith("A") ? "B" : "A"}${signature.slice(1)}`;
   await assert.rejects(() => verifyKDrivePayload(secret, tampered, now + 1), /Invalid signed kDrive token/);
   await assert.rejects(() => verifyKDrivePayload(secret, token, now + 60_001), /expired/);
   await assert.rejects(() => verifyKDrivePayload(generateOperationSecret(), token, now + 1), /Invalid signed kDrive token/);
@@ -57,7 +57,9 @@ test("overwrite content digests bind exact bytes and encoding", async () => {
 
 test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
   const registrations = new Map<string, Record<string, unknown>>();
+  let resourceRegistrations = 0;
   const fakeServer = {
+    registerResource() { resourceRegistrations += 1; },
     registerTool(name: string, definition: Record<string, unknown>) {
       registrations.set(name, definition);
     },
@@ -74,6 +76,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
   });
 
   assert.equal(registrations.size, 13);
+  assert.equal(resourceRegistrations, 1);
   const forbidden = new Set(["fileId", "directoryId", "parentId", "destinationDirectoryId", "restoreId", "etag"]);
   for (const [name, definition] of registrations) {
     const schema = definition.inputSchema as Record<string, unknown>;
@@ -85,4 +88,9 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
     Object.keys(registrations.get("kdrive_move")!.inputSchema as Record<string, unknown>).sort(),
     ["destinationPath", "operationToken", "path"],
   );
+  assert.equal(
+    ((registrations.get("kdrive_search")!._meta as Record<string, unknown>).ui as Record<string, unknown>).resourceUri,
+    "ui://kdrive/results-v2.html",
+  );
+  assert.ok(registrations.get("kdrive_search")!.outputSchema);
 });

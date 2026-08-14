@@ -15,7 +15,7 @@ other remote MCP clients.
 - Public tools accept paths and filenames; file IDs, folder IDs, and ETags stay server-side.
 - Tools use MCP read/write and destructive annotations for one native host approval per write.
 - Rename, move, overwrite, and trash require short-lived, one-use signed operation tokens stored in the MCP session's Durable Object database.
-- Open in kDrive results use expiring signed redirect links, so tool output does not expose internal IDs or create public shares.
+- Open in kDrive results use expiring signed redirect links and an inline MCP Apps result card, so tool output does not expose internal IDs or create public shares.
 - Permanent deletion is not exposed.
 
 ## Deploy
