@@ -4,8 +4,8 @@
   <img src="assets/kdrive-connector-logo.png" width="240" alt="kDrive Connector logo">
 </p>
 
-A safety-first Model Context Protocol connector that gives ChatGPT Work, Codex,
-and other MCP clients controlled read/write access to Infomaniak kDrive.
+A path-first Model Context Protocol connector that gives ChatGPT Work, Codex,
+and other MCP clients natural, controlled read/write access to Infomaniak kDrive.
 
 The connector uses Infomaniak's documented API-token or OAuth 2 authentication
 and the kDrive REST API. It does not send file contents to a second AI service.
@@ -15,19 +15,19 @@ operations.
 ## Included tools
 
 - Check the selected drive connection
-- Browse folders and retrieve file metadata
+- Browse folders and retrieve file details by natural path
 - Search filenames and supported document content
 - Read files as converted text or base64
 - Create folders and upload new files without overwriting existing names
-- Prepare and execute rename, move, overwrite, and trash operations
+- Rename, move, overwrite, and trash items through the host's normal approval flow
 - Restore recoverable items from trash
 
-Rename, move, overwrite, and trash require an exact, target-bound confirmation phrase returned by `kdrive_prepare_sensitive_change`. MCP destructive-action annotations provide an additional host approval boundary. Permanent deletion and empty-trash operations are deliberately not exposed.
+The connector accepts paths such as `/Private/Projects/brief.docx`, keeps IDs and ETags behind the scenes, and uses MCP write/destructive annotations so the host can provide its normal approval boundary. Permanent deletion and empty-trash operations are deliberately not exposed.
 
 ## Architecture
 
-The repository contains two runtimes built on the same kDrive client and safety
-rules:
+The repository contains two runtimes built on the same kDrive client, tool
+definitions, workflow instructions, and safety rules:
 
 - The root package is a local stdio MCP server. It reads its Infomaniak token
   from macOS Keychain or a user-only token file.
@@ -120,12 +120,15 @@ deployment and ChatGPT connection guide.
 
 ## Safety behavior
 
-- Read/search tools run without confirmation.
+- Read/search tools run directly.
 - New folders and new-file uploads are non-destructive writes and never overwrite on name conflict.
-- Rename, move, overwrite, and trash require a separate preparation step plus the exact user-approved phrase.
-- Overwrite additionally requires the reviewed ETag, preventing a stale write over a newer version.
+- Writes use MCP annotations so ChatGPT or another host can show its native approval UI when appropriate.
+- Rename and move resolve exact paths and fail safely on name conflicts.
+- Overwrite fetches and enforces the current ETag immediately before upload, preventing a concurrent stale write.
 - Trash is recoverable; permanent-delete API operations are not available.
 - Reads default to 2 MiB and uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`.
+
+The included `manage-kdrive-files` skill teaches compatible hosts to prefer paths, keep connector internals out of normal conversation, and report concise outcomes. If a user asks only to preview a change, the skill prevents the write tool from running.
 
 ## Development checks
 

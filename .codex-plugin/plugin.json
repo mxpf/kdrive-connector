@@ -1,23 +1,28 @@
 {
   "name": "kdrive-connector",
-  "version": "0.1.0",
-  "description": "Private, safety-first read/write access to Infomaniak kDrive.",
+  "version": "0.2.0",
+  "description": "Natural, path-first read/write access to Infomaniak kDrive.",
   "author": {
     "name": "Max Pfennighaus"
   },
+  "repository": "https://github.com/mxpf/kdrive-connector",
+  "keywords": ["kdrive", "infomaniak", "files", "storage", "mcp"],
+  "skills": "./skills/",
   "interface": {
     "displayName": "kDrive Connector",
-    "shortDescription": "Search and safely update your kDrive files.",
-    "longDescription": "Connect ChatGPT and Codex to Infomaniak kDrive through OAuth 2. Read and search files freely; sensitive changes require explicit confirmation.",
+    "shortDescription": "Find, read, save, and organize kDrive files.",
+    "longDescription": "Work naturally with Infomaniak kDrive from ChatGPT and Codex. Find and read files by name or path, save finished work, and safely organize or update existing items.",
     "developerName": "Max Pfennighaus",
     "category": "Productivity",
     "capabilities": ["Search", "Read", "Write"],
     "defaultPrompt": [
-      "Search my kDrive for files about this project.",
-      "Read and summarize a document from my kDrive.",
-      "Upload this finished document to my kDrive."
+      "Find my latest invoice in kDrive.",
+      "Summarize the document in /Private/Projects.",
+      "Save this finished document to my kDrive."
     ],
-    "brandColor": "#0098FF"
+    "brandColor": "#0098FF",
+    "composerIcon": "./assets/kdrive-connector-icon.png",
+    "logo": "./assets/kdrive-connector-logo.png"
   },
   "mcpServers": "./.mcp.json"
 }

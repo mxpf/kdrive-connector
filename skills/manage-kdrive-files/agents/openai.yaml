@@ -1,0 +1,13 @@
+interface:
+  display_name: "Work with kDrive Files"
+  short_description: "Find, read, save, and organize kDrive files"
+  default_prompt: "Use $manage-kdrive-files to find and summarize my latest invoice."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "kdrive"
+      description: "Search, read, and safely manage Infomaniak kDrive files"
+      transport: "streamable_http"
+      url: "https://kdrive-connector-mcp.maxpfennighaus.workers.dev/mcp"
+policy:
+  allow_implicit_invocation: true

@@ -2,7 +2,7 @@
   "mcpServers": {
     "kdrive": {
       "title": "kDrive",
-      "description": "Safely search, read, create, upload, rename, move, overwrite, and trash files in Infomaniak kDrive.",
+      "description": "Find, read, save, and organize Infomaniak kDrive files using natural paths.",
       "cwd": ".",
       "command": "node",
       "args": [

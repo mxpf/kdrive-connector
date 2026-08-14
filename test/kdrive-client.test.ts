@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig } from "../src/config.js";
-import { KDriveClient } from "../src/kdrive-client.js";
+import { KDriveClient, normalizeKDrivePath, splitKDrivePath } from "../src/kdrive-client.js";
 
 const config = loadConfig({
   INFOMANIAK_API_BASE_URL: "https://api.example.test",
@@ -112,4 +112,68 @@ test("a 401 triggers one forced token refresh", async () => {
   }, fakeFetch);
   await client.getFile(123, 1);
   assert.deepEqual(refreshFlags, [false, true]);
+});
+
+test("paths normalize for natural path-first tool inputs", () => {
+  assert.equal(normalizeKDrivePath(" Private//Invoices/ "), "/Private/Invoices");
+  assert.deepEqual(splitKDrivePath("/Private/Invoices/report.pdf"), {
+    parentPath: "/Private/Invoices",
+    name: "report.pdf",
+  });
+  assert.throws(() => normalizeKDrivePath("/Private/../Other"), /cannot contain/);
+  assert.throws(() => splitKDrivePath("/"), /root cannot/);
+});
+
+test("path resolution walks folders and prefers an exact-case match", async () => {
+  const seenPaths: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    seenPaths.push(url.pathname);
+    if (url.pathname.endsWith("/files/1")) {
+      return Response.json({ result: "success", data: { id: 1, name: "root", path: "/", type: "dir" } });
+    }
+    if (url.pathname.endsWith("/files/1/files")) {
+      return Response.json({ result: "success", data: [{ id: 5, name: "Private", path: "/Private", type: "dir" }] });
+    }
+    if (url.pathname.endsWith("/files/5/files")) {
+      return Response.json({
+        result: "success",
+        data: [
+          { id: 9, name: "report.pdf", path: "/Private/report.pdf", type: "pdf" },
+          { id: 10, name: "Report.pdf", path: "/Private/Report.pdf", type: "pdf" },
+        ],
+      });
+    }
+    return new Response("not found", { status: 404 });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const file = await client.resolvePath(123, "/Private/Report.pdf");
+  assert.equal(file.id, 10);
+  assert.deepEqual(seenPaths, [
+    "/3/drive/123/files/1",
+    "/3/drive/123/files/1/files",
+    "/3/drive/123/files/5/files",
+  ]);
+});
+
+test("path resolution accepts one case-insensitive match but rejects ambiguity", async () => {
+  const makeClient = (items: Array<{ id: number; name: string; path: string; type: string }>) => new KDriveClient(
+    config,
+    { getAccessToken: async () => "test-token" },
+    async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/files/1/files")) return Response.json({ result: "success", data: items });
+      return Response.json({ result: "success", data: { id: 1, name: "root", path: "/", type: "dir" } });
+    },
+  );
+
+  const unique = await makeClient([{ id: 5, name: "Private", path: "/Private", type: "dir" }]).resolvePath(123, "/private");
+  assert.equal(unique.id, 5);
+  await assert.rejects(
+    makeClient([
+      { id: 5, name: "Private", path: "/Private", type: "dir" },
+      { id: 6, name: "PRIVATE", path: "/PRIVATE", type: "dir" },
+    ]).resolvePath(123, "/private"),
+    /ambiguous/,
+  );
 });

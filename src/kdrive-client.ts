@@ -62,6 +62,29 @@ export interface TextDownloadResult extends DownloadResult {
   textSource: "raw" | "converted";
 }
 
+export function normalizeKDrivePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) throw new Error("A kDrive path is required.");
+  if (trimmed.includes("\\")) throw new Error("Use forward slashes in kDrive paths.");
+  const segments = trimmed.split("/").filter(Boolean);
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error("kDrive paths cannot contain '.' or '..' segments.");
+  }
+  return segments.length === 0 ? "/" : `/${segments.join("/")}`;
+}
+
+export function splitKDrivePath(path: string): { parentPath: string; name: string } {
+  const normalized = normalizeKDrivePath(path);
+  if (normalized === "/") throw new Error("The kDrive root cannot be used as an item destination.");
+  const segments = normalized.slice(1).split("/");
+  const name = segments.pop();
+  if (!name) throw new Error("The destination path must include a file or folder name.");
+  return {
+    parentPath: segments.length === 0 ? "/" : `/${segments.join("/")}`,
+    name,
+  };
+}
+
 function isTextContentType(contentType: string | undefined): boolean {
   const mimeType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
   if (!mimeType) return false;
@@ -176,6 +199,37 @@ export class KDriveClient {
       has_more: response.has_more,
       response_at: response.response_at,
     };
+  }
+
+  async resolvePath(driveId: number, path: string): Promise<KDriveFile> {
+    const normalized = normalizeKDrivePath(path);
+    if (normalized === "/") return this.getFile(driveId, 1);
+
+    let current: KDriveFile = await this.getFile(driveId, 1);
+    for (const segment of normalized.slice(1).split("/")) {
+      if (current.type !== "dir") {
+        throw new Error(`Cannot resolve ${normalized}: ${current.path ?? current.name} is not a folder.`);
+      }
+
+      const exactMatches: KDriveFile[] = [];
+      const caseInsensitiveMatches: KDriveFile[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000 });
+        exactMatches.push(...page.data.filter((item) => item.name === segment));
+        caseInsensitiveMatches.push(...page.data.filter(
+          (item) => item.name !== segment && item.name.toLocaleLowerCase() === segment.toLocaleLowerCase(),
+        ));
+        cursor = page.has_more ? page.cursor : undefined;
+        if (page.has_more && !cursor) throw new Error(`kDrive did not return a cursor while resolving ${normalized}.`);
+      } while (cursor && exactMatches.length === 0);
+
+      const matches = exactMatches.length > 0 ? exactMatches : caseInsensitiveMatches;
+      if (matches.length === 0) throw new Error(`No kDrive item exists at ${normalized}.`);
+      if (matches.length > 1) throw new Error(`The path ${normalized} is ambiguous because multiple items match ${segment}.`);
+      current = matches[0]!;
+    }
+    return current;
   }
 
   async search(

@@ -12,7 +12,8 @@ other remote MCP clients.
 - The GitHub access token is used only to fetch that username and is then
   discarded; it is not embedded in the MCP token.
 - The Infomaniak API token and drive ID are Cloudflare Worker secrets.
-- Rename, move, overwrite, and trash still require an exact confirmation phrase.
+- Tools use MCP read/write and destructive annotations for the host's native approval boundary.
+- Paths are resolved server-side, and overwrite requests enforce the file's current ETag.
 - Permanent deletion is not exposed.
 
 ## Deploy
@@ -74,7 +75,9 @@ OAuth metadata is published at:
    `https://<worker-host>/mcp`.
 3. Approve the connector's consent page and sign in with the allowlisted GitHub
    account.
-4. Review the discovered tools before enabling the connection.
+4. Review the discovered tools before enabling the connection. After an update,
+   scan or refresh the tools so ChatGPT receives the latest path-first schemas
+   and server instructions.
 
 Never put `.dev.vars`, API tokens, OAuth client secrets, or cookie encryption
 keys in Git. The included `.gitignore` excludes local secret files.

@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
 import type { AppConfig } from "../../src/config.js";
 import { KDriveClient } from "../../src/kdrive-client.js";
+import { KDRIVE_SERVER_INSTRUCTIONS } from "../../src/kdrive-instructions.js";
 import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
 import type { Props } from "./utils";
@@ -16,7 +17,10 @@ function positiveInteger(value: string, name: string): number {
 }
 
 export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
-	server = new McpServer({ name: "kdrive-connector", version: "0.1.0" });
+	server = new McpServer(
+		{ name: "kdrive-connector", version: "0.2.0" },
+		{ instructions: KDRIVE_SERVER_INSTRUCTIONS },
+	);
 
 	async init() {
 		if (!this.props || this.props.login.toLowerCase() !== this.env.ALLOWED_GITHUB_LOGIN.toLowerCase()) {
@@ -45,7 +49,11 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 			driveId,
 			maxReadBytes,
 			maxUploadBytes,
-			authorizedGitHubLogin: this.props.login,
+			connectionStatus: async () => ({
+				connected: true,
+				authentication: "OAuth-protected remote connector",
+				drive: await client.getDrive(driveId),
+			}),
 		});
 	}
 }
