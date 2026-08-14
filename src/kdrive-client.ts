@@ -61,7 +61,10 @@ export class KDriveClient {
     private readonly tokenProvider: Pick<TokenProvider, "getAccessToken">,
     fetchImpl: typeof fetch = fetch,
   ) {
-    this.fetchImpl = fetchImpl;
+    // Keep platform fetch functions as plain calls. Invoking a stored native
+    // fetch as `this.fetchImpl(...)` supplies KDriveClient as its receiver,
+    // which Cloudflare Workers rejects with an "Illegal invocation" error.
+    this.fetchImpl = (input, init) => fetchImpl(input, init);
   }
 
   private buildUrl(endpoint: string, query: Record<string, QueryValue> = {}): URL {

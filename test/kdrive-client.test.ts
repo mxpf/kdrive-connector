@@ -28,6 +28,22 @@ test("directory listing sends bearer auth and documented pagination parameters",
   assert.equal(page.data[0]?.name, "Notes");
 });
 
+test("platform fetch is called without the KDriveClient as its receiver", async () => {
+  let seenReceiver: unknown = Symbol("not called");
+  const receiverAwareFetch = async function (this: unknown) {
+    seenReceiver = this;
+    return new Response(JSON.stringify({ result: "success", data: { id: 1, name: "root", type: "dir" } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  } as typeof fetch;
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, receiverAwareFetch);
+  await client.getFile(123, 1);
+
+  assert.equal(seenReceiver, undefined);
+});
+
 test("new uploads default to a conflict-safe request shape", async () => {
   let seenUrl = "";
   let seenBody = "";
