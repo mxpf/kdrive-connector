@@ -1,6 +1,6 @@
 {
   "name": "kdrive-connector",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Private MCP connector for safe read/write access to Infomaniak kDrive.",
   "type": "module",

@@ -1,23 +1,28 @@
 {
   "name": "kdrive-connector",
-  "version": "0.1.0",
-  "description": "Private, safety-first read/write access to Infomaniak kDrive.",
+  "version": "0.3.0",
+  "description": "Seamless path-first search, preview, and safe read/write access to Infomaniak kDrive.",
   "author": {
     "name": "Max Pfennighaus"
   },
+  "repository": "https://github.com/mxpf/kdrive-connector",
+  "keywords": ["kdrive", "infomaniak", "files", "storage", "mcp"],
+  "skills": "./skills/",
+  "apps": "./.app.json",
   "interface": {
     "displayName": "kDrive Connector",
-    "shortDescription": "Search and safely update your kDrive files.",
-    "longDescription": "Connect ChatGPT and Codex to Infomaniak kDrive through OAuth 2. Read and search files freely; sensitive changes require explicit confirmation.",
+    "shortDescription": "Find, preview, open, save, and organize kDrive files.",
+    "longDescription": "Work naturally with Infomaniak kDrive from ChatGPT and Codex. Search files by ordinary words or paths, see useful previews and private Open in kDrive links, save finished work, and safely organize or update existing items with native approvals.",
     "developerName": "Max Pfennighaus",
     "category": "Productivity",
-    "capabilities": ["Search", "Read", "Write"],
+    "capabilities": ["Search", "Preview", "Read", "Write"],
     "defaultPrompt": [
-      "Search my kDrive for files about this project.",
-      "Read and summarize a document from my kDrive.",
-      "Upload this finished document to my kDrive."
+      "Find my latest invoice in kDrive and preview it.",
+      "Summarize the document in /Private/Projects.",
+      "Save this finished document to my kDrive."
     ],
-    "brandColor": "#0098FF"
-  },
-  "mcpServers": "./.mcp.json"
+    "brandColor": "#0098FF",
+    "composerIcon": "./assets/kdrive-connector-icon.png",
+    "logo": "./assets/kdrive-connector-logo.png"
+  }
 }

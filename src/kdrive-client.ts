@@ -34,7 +34,7 @@ export interface CursorPage<T> {
 interface ApiEnvelope<T> {
   result: "success" | "error" | "asynchronous";
   data?: T;
-  cursor?: string;
+  cursor?: string | null;
   has_more?: boolean;
   response_at?: number;
   error?: {
@@ -53,6 +53,49 @@ interface RequestOptions {
   body?: Uint8Array;
 }
 
+export interface DownloadResult {
+  bytes: Uint8Array;
+  contentType: string;
+}
+
+export interface TextDownloadResult extends DownloadResult {
+  textSource: "raw" | "converted";
+}
+
+export function normalizeKDrivePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) throw new Error("A kDrive path is required.");
+  if (trimmed.includes("\\")) throw new Error("Use forward slashes in kDrive paths.");
+  const segments = trimmed.split("/").filter(Boolean);
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error("kDrive paths cannot contain '.' or '..' segments.");
+  }
+  return segments.length === 0 ? "/" : `/${segments.join("/")}`;
+}
+
+export function splitKDrivePath(path: string): { parentPath: string; name: string } {
+  const normalized = normalizeKDrivePath(path);
+  if (normalized === "/") throw new Error("The kDrive root cannot be used as an item destination.");
+  const segments = normalized.slice(1).split("/");
+  const name = segments.pop();
+  if (!name) throw new Error("The destination path must include a file or folder name.");
+  return {
+    parentPath: segments.length === 0 ? "/" : `/${segments.join("/")}`,
+    name,
+  };
+}
+
+function isTextContentType(contentType: string | undefined): boolean {
+  const mimeType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (!mimeType) return false;
+  return mimeType.startsWith("text/")
+    || mimeType === "application/json"
+    || mimeType === "application/javascript"
+    || mimeType === "application/xml"
+    || mimeType.endsWith("+json")
+    || mimeType.endsWith("+xml");
+}
+
 export class KDriveClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -61,7 +104,10 @@ export class KDriveClient {
     private readonly tokenProvider: Pick<TokenProvider, "getAccessToken">,
     fetchImpl: typeof fetch = fetch,
   ) {
-    this.fetchImpl = fetchImpl;
+    // Keep platform fetch functions as plain calls. Invoking a stored native
+    // fetch as `this.fetchImpl(...)` supplies KDriveClient as its receiver,
+    // which Cloudflare Workers rejects with an "Illegal invocation" error.
+    this.fetchImpl = (input, init) => fetchImpl(input, init);
   }
 
   private buildUrl(endpoint: string, query: Record<string, QueryValue> = {}): URL {
@@ -149,10 +195,41 @@ export class KDriveClient {
     });
     return {
       data: response.data ?? [],
-      cursor: response.cursor,
+      cursor: response.cursor ?? undefined,
       has_more: response.has_more,
       response_at: response.response_at,
     };
+  }
+
+  async resolvePath(driveId: number, path: string): Promise<KDriveFile> {
+    const normalized = normalizeKDrivePath(path);
+    if (normalized === "/") return this.getFile(driveId, 1);
+
+    let current: KDriveFile = await this.getFile(driveId, 1);
+    for (const segment of normalized.slice(1).split("/")) {
+      if (current.type !== "dir") {
+        throw new Error(`Cannot resolve ${normalized}: ${current.path ?? current.name} is not a folder.`);
+      }
+
+      const exactMatches: KDriveFile[] = [];
+      const caseInsensitiveMatches: KDriveFile[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000 });
+        exactMatches.push(...page.data.filter((item) => item.name === segment));
+        caseInsensitiveMatches.push(...page.data.filter(
+          (item) => item.name !== segment && item.name.toLocaleLowerCase() === segment.toLocaleLowerCase(),
+        ));
+        cursor = page.has_more ? page.cursor : undefined;
+        if (page.has_more && !cursor) throw new Error(`kDrive did not return a cursor while resolving ${normalized}.`);
+      } while (cursor && exactMatches.length === 0);
+
+      const matches = exactMatches.length > 0 ? exactMatches : caseInsensitiveMatches;
+      if (matches.length === 0) throw new Error(`No kDrive item exists at ${normalized}.`);
+      if (matches.length > 1) throw new Error(`The path ${normalized} is ambiguous because multiple items match ${segment}.`);
+      current = matches[0]!;
+    }
+    return current;
   }
 
   async search(
@@ -180,7 +257,7 @@ export class KDriveClient {
     });
     return {
       data: response.data ?? [],
-      cursor: response.cursor,
+      cursor: response.cursor ?? undefined,
       has_more: response.has_more,
       response_at: response.response_at,
     };
@@ -190,7 +267,7 @@ export class KDriveClient {
     driveId: number,
     fileId: number,
     options: { convertAs?: "text" | "pdf" } = {},
-  ): Promise<{ bytes: Uint8Array; contentType: string }> {
+  ): Promise<DownloadResult> {
     const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/download`, {
       query: { as: options.convertAs },
       headers: { accept: "*/*" },
@@ -199,6 +276,33 @@ export class KDriveClient {
       bytes: new Uint8Array(await response.arrayBuffer()),
       contentType: response.headers.get("content-type") ?? "application/octet-stream",
     };
+  }
+
+  async downloadText(driveId: number, fileId: number): Promise<TextDownloadResult> {
+    const file = await this.getFile(driveId, fileId);
+    if (isTextContentType(file.mime_type)) {
+      return { ...await this.download(driveId, fileId), textSource: "raw" };
+    }
+
+    try {
+      const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/preview`, {
+        query: { as: "text" },
+        headers: { accept: "*/*" },
+      });
+      return {
+        bytes: new Uint8Array(await response.arrayBuffer()),
+        contentType: response.headers.get("content-type") ?? "text/plain",
+        textSource: "converted",
+      };
+    } catch (previewError) {
+      try {
+        return { ...await this.download(driveId, fileId, { convertAs: "text" }), textSource: "converted" };
+      } catch {
+        const raw = await this.download(driveId, fileId);
+        if (!isTextContentType(raw.contentType)) throw previewError;
+        return { ...raw, textSource: "raw" };
+      }
+    }
   }
 
   async createDirectory(driveId: number, parentId: number, name: string, color?: string): Promise<KDriveFile> {

@@ -25,10 +25,3 @@ export class KDriveApiError extends Error {
     this.details = details;
   }
 }
-
-export class ConfirmationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ConfirmationError";
-  }
-}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig } from "../src/config.js";
-import { KDriveClient } from "../src/kdrive-client.js";
+import { KDriveClient, normalizeKDrivePath, splitKDrivePath } from "../src/kdrive-client.js";
 
 const config = loadConfig({
   INFOMANIAK_API_BASE_URL: "https://api.example.test",
@@ -26,6 +26,84 @@ test("directory listing sends bearer auth and documented pagination parameters",
   assert.equal(url.searchParams.get("limit"), "25");
   assert.equal(seenAuthorization, "Bearer test-token");
   assert.equal(page.data[0]?.name, "Notes");
+});
+
+test("directory and search pagination omit a null terminal cursor", async () => {
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    return Response.json({
+      result: "success",
+      data: url.pathname.endsWith("/search") ? [] : [{ id: 7, name: "Notes", type: "dir" }],
+      cursor: null,
+      has_more: false,
+    });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+
+  assert.equal((await client.listDirectory(123, 1)).cursor, undefined);
+  assert.equal((await client.search(123, "invoice")).cursor, undefined);
+});
+
+test("platform fetch is called without the KDriveClient as its receiver", async () => {
+  let seenReceiver: unknown = Symbol("not called");
+  const receiverAwareFetch = async function (this: unknown) {
+    seenReceiver = this;
+    return new Response(JSON.stringify({ result: "success", data: { id: 1, name: "root", type: "dir" } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  } as typeof fetch;
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, receiverAwareFetch);
+  await client.getFile(123, 1);
+
+  assert.equal(seenReceiver, undefined);
+});
+
+test("plain text reads use raw bytes instead of the document converter", async () => {
+  const seenUrls: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    seenUrls.push(url);
+    if (url.includes("/files/44/download")) {
+      return new Response("plain text", { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
+    return new Response(JSON.stringify({
+      result: "success",
+      data: { id: 44, name: "note.txt", type: "file", mime_type: "text/plain" },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const result = await client.downloadText(123, 44);
+
+  assert.equal(new TextDecoder().decode(result.bytes), "plain text");
+  assert.equal(result.textSource, "raw");
+  assert.equal(seenUrls.some((url) => url.includes("as=text")), false);
+});
+
+test("document text reads use kDrive's documented preview conversion endpoint", async () => {
+  const seenUrls: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    seenUrls.push(url);
+    if (url.includes("/files/45/preview")) {
+      return new Response("converted document", { status: 200, headers: { "content-type": "text/plain" } });
+    }
+    return Response.json({
+      result: "success",
+      data: { id: 45, name: "report.docx", type: "file", mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    });
+  };
+
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const result = await client.downloadText(123, 45);
+
+  assert.equal(new TextDecoder().decode(result.bytes), "converted document");
+  assert.equal(result.textSource, "converted");
+  const previewUrl = new URL(seenUrls.find((url) => url.includes("/preview"))!);
+  assert.equal(previewUrl.pathname, "/2/drive/123/files/45/preview");
+  assert.equal(previewUrl.searchParams.get("as"), "text");
 });
 
 test("new uploads default to a conflict-safe request shape", async () => {
@@ -74,4 +152,68 @@ test("a 401 triggers one forced token refresh", async () => {
   }, fakeFetch);
   await client.getFile(123, 1);
   assert.deepEqual(refreshFlags, [false, true]);
+});
+
+test("paths normalize for natural path-first tool inputs", () => {
+  assert.equal(normalizeKDrivePath(" Private//Invoices/ "), "/Private/Invoices");
+  assert.deepEqual(splitKDrivePath("/Private/Invoices/report.pdf"), {
+    parentPath: "/Private/Invoices",
+    name: "report.pdf",
+  });
+  assert.throws(() => normalizeKDrivePath("/Private/../Other"), /cannot contain/);
+  assert.throws(() => splitKDrivePath("/"), /root cannot/);
+});
+
+test("path resolution walks folders and prefers an exact-case match", async () => {
+  const seenPaths: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    seenPaths.push(url.pathname);
+    if (url.pathname.endsWith("/files/1")) {
+      return Response.json({ result: "success", data: { id: 1, name: "root", path: "/", type: "dir" } });
+    }
+    if (url.pathname.endsWith("/files/1/files")) {
+      return Response.json({ result: "success", data: [{ id: 5, name: "Private", path: "/Private", type: "dir" }] });
+    }
+    if (url.pathname.endsWith("/files/5/files")) {
+      return Response.json({
+        result: "success",
+        data: [
+          { id: 9, name: "report.pdf", path: "/Private/report.pdf", type: "pdf" },
+          { id: 10, name: "Report.pdf", path: "/Private/Report.pdf", type: "pdf" },
+        ],
+      });
+    }
+    return new Response("not found", { status: 404 });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+  const file = await client.resolvePath(123, "/Private/Report.pdf");
+  assert.equal(file.id, 10);
+  assert.deepEqual(seenPaths, [
+    "/3/drive/123/files/1",
+    "/3/drive/123/files/1/files",
+    "/3/drive/123/files/5/files",
+  ]);
+});
+
+test("path resolution accepts one case-insensitive match but rejects ambiguity", async () => {
+  const makeClient = (items: Array<{ id: number; name: string; path: string; type: string }>) => new KDriveClient(
+    config,
+    { getAccessToken: async () => "test-token" },
+    async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/files/1/files")) return Response.json({ result: "success", data: items });
+      return Response.json({ result: "success", data: { id: 1, name: "root", path: "/", type: "dir" } });
+    },
+  );
+
+  const unique = await makeClient([{ id: 5, name: "Private", path: "/Private", type: "dir" }]).resolvePath(123, "/private");
+  assert.equal(unique.id, 5);
+  await assert.rejects(
+    makeClient([
+      { id: 5, name: "Private", path: "/Private", type: "dir" },
+      { id: 6, name: "PRIVATE", path: "/PRIVATE", type: "dir" },
+    ]).resolvePath(123, "/private"),
+    /ambiguous/,
+  );
 });
