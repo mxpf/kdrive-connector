@@ -25,6 +25,7 @@ import { validateName } from "./safety.js";
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v3.html";
+const KDRIVE_RESULTS_UI_LEGACY_URI = "ui://kdrive/results-v2.html";
 
 const KDRIVE_RESULTS_UI = `
 <!doctype html>
@@ -349,22 +350,10 @@ const resultsUiMeta = {
   "openai/toolInvocation/invoked": "kDrive results ready",
 };
 
-export function registerKDriveTools(
-  server: Pick<McpServer, "registerTool">,
-  client: KDriveClient,
-  config: KDriveToolConfig,
-): void {
-  const resourceServer = server as unknown as {
-    registerResource: (
-      name: string,
-      uri: string,
-      metadata: Record<string, never>,
-      read: () => Promise<Record<string, unknown>>,
-    ) => unknown;
-  };
-  resourceServer.registerResource("kdrive-results", KDRIVE_RESULTS_UI_URI, {}, async () => ({
+function kDriveResultsResource(uri: string): Record<string, unknown> {
+  return {
     contents: [{
-      uri: KDRIVE_RESULTS_UI_URI,
+      uri,
       mimeType: "text/html;profile=mcp-app",
       text: KDRIVE_RESULTS_UI,
       _meta: {
@@ -386,7 +375,36 @@ export function registerKDriveTools(
         },
       },
     }],
-  }));
+  };
+}
+
+export function registerKDriveTools(
+  server: Pick<McpServer, "registerTool">,
+  client: KDriveClient,
+  config: KDriveToolConfig,
+): void {
+  const resourceServer = server as unknown as {
+    registerResource: (
+      name: string,
+      uri: string,
+      metadata: Record<string, never>,
+      read: () => Promise<Record<string, unknown>>,
+    ) => unknown;
+  };
+  resourceServer.registerResource(
+    "kdrive-results",
+    KDRIVE_RESULTS_UI_URI,
+    {},
+    async () => kDriveResultsResource(KDRIVE_RESULTS_UI_URI),
+  );
+  // Older ChatGPT clients may retain the previous resource URI after a connector update.
+  // Keep the alias serving the current UI so stale clients recover without losing results.
+  resourceServer.registerResource(
+    "kdrive-results-v2-compatibility",
+    KDRIVE_RESULTS_UI_LEGACY_URI,
+    {},
+    async () => kDriveResultsResource(KDRIVE_RESULTS_UI_LEGACY_URI),
+  );
 
   server.registerTool(
     "kdrive_connection_status",

@@ -58,17 +58,15 @@ test("overwrite content digests bind exact bytes and encoding", async () => {
 test("public kDrive tool schemas expose paths but no IDs or ETags", async () => {
   const registrations = new Map<string, Record<string, unknown>>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
-  let resourceRegistrations = 0;
-  let readResultsResource: (() => Promise<Record<string, unknown>>) | undefined;
+  const resourceRegistrations = new Map<string, () => Promise<Record<string, unknown>>>();
   const fakeServer = {
     registerResource(
       _name: string,
-      _uri: string,
+      uri: string,
       _metadata: Record<string, never>,
       read: () => Promise<Record<string, unknown>>,
     ) {
-      resourceRegistrations += 1;
-      readResultsResource = read;
+      resourceRegistrations.set(uri, read);
     },
     registerTool(
       name: string,
@@ -109,7 +107,10 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   });
 
   assert.equal(registrations.size, 13);
-  assert.equal(resourceRegistrations, 1);
+  assert.deepEqual(
+    [...resourceRegistrations.keys()].sort(),
+    ["ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html"],
+  );
   const forbidden = new Set(["fileId", "directoryId", "parentId", "destinationDirectoryId", "restoreId", "etag"]);
   for (const [name, definition] of registrations) {
     const schema = definition.inputSchema as Record<string, unknown>;
@@ -126,12 +127,14 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     "ui://kdrive/results-v3.html",
   );
   assert.ok(registrations.get("kdrive_search")!.outputSchema);
-  assert.ok(readResultsResource);
-  const resource = await readResultsResource();
-  const contents = resource.contents as Array<{ text?: string }>;
-  assert.match(contents[0]?.text ?? "", /notifyIntrinsicHeight/);
-  assert.match(contents[0]?.text ?? "", /ui\/notifications\/size-changed/);
-  assert.match(contents[0]?.text ?? "", /ResizeObserver/);
+  for (const [uri, readResultsResource] of resourceRegistrations) {
+    const resource = await readResultsResource();
+    const contents = resource.contents as Array<{ uri?: string; text?: string }>;
+    assert.equal(contents[0]?.uri, uri);
+    assert.match(contents[0]?.text ?? "", /notifyIntrinsicHeight/);
+    assert.match(contents[0]?.text ?? "", /ui\/notifications\/size-changed/);
+    assert.match(contents[0]?.text ?? "", /ResizeObserver/);
+  }
 
   const status = await handlers.get("kdrive_connection_status")?.() as {
     content: Array<{ type: string; text?: string }>;
