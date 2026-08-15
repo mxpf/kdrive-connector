@@ -32,6 +32,10 @@
     {
       "new_sqlite_classes": ["KDriveMCP"],
       "tag": "v1"
+    },
+    {
+      "new_sqlite_classes": ["KDriveOperationNonceStore"],
+      "tag": "v2"
     }
   ],
   "durable_objects": {
@@ -39,6 +43,10 @@
       {
         "class_name": "KDriveMCP",
         "name": "MCP_OBJECT"
+      },
+      {
+        "class_name": "KDriveOperationNonceStore",
+        "name": "KDRIVE_OPERATION_NONCES"
       }
     ]
   },

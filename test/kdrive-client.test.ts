@@ -133,6 +133,45 @@ test("new uploads default to a conflict-safe request shape", async () => {
   assert.equal(seenBody, "hello");
 });
 
+test("move and recoverable-trash requests use Infomaniak's documented ID-based routes", async () => {
+  const requests: Array<{ url: string; method: string; body: string }> = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    requests.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? init.body : "",
+    });
+    return Response.json({ result: "success", data: true });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+
+  await client.move(123, 44, 55);
+  await client.trash(123, 44);
+  await client.restore(123, 44, 66);
+
+  assert.deepEqual(requests.map((request) => ({
+    pathname: new URL(request.url).pathname,
+    method: request.method,
+    body: request.body,
+  })), [
+    {
+      pathname: "/3/drive/123/files/44/move/55",
+      method: "POST",
+      body: JSON.stringify({ conflict: "error" }),
+    },
+    {
+      pathname: "/2/drive/123/files/44",
+      method: "DELETE",
+      body: "",
+    },
+    {
+      pathname: "/2/drive/123/trash/44/restore",
+      method: "POST",
+      body: JSON.stringify({ destination_directory_id: 66 }),
+    },
+  ]);
+});
+
 test("a 401 triggers one forced token refresh", async () => {
   const refreshFlags: boolean[] = [];
   let calls = 0;
@@ -156,6 +195,10 @@ test("a 401 triggers one forced token refresh", async () => {
 
 test("paths normalize for natural path-first tool inputs", () => {
   assert.equal(normalizeKDrivePath(" Private//Invoices/ "), "/Private/Invoices");
+  assert.equal(
+    normalizeKDrivePath("/Private/Résumé — Design & Copy.pdf"),
+    "/Private/Résumé — Design & Copy.pdf",
+  );
   assert.deepEqual(splitKDrivePath("/Private/Invoices/report.pdf"), {
     parentPath: "/Private/Invoices",
     name: "report.pdf",

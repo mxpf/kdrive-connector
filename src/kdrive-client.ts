@@ -51,6 +51,10 @@ interface RequestOptions {
   headers?: Record<string, string>;
   json?: unknown;
   body?: Uint8Array;
+  diagnostics?: {
+    operation: "create_directory" | "move" | "trash" | "restore";
+    traceId: string;
+  };
 }
 
 export interface DownloadResult {
@@ -66,7 +70,7 @@ export function normalizeKDrivePath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) throw new Error("A kDrive path is required.");
   if (trimmed.includes("\\")) throw new Error("Use forward slashes in kDrive paths.");
-  const segments = trimmed.split("/").filter(Boolean);
+  const segments = trimmed.split("/").filter(Boolean).map((segment) => segment.normalize("NFC"));
   if (segments.some((segment) => segment === "." || segment === "..")) {
     throw new Error("kDrive paths cannot contain '.' or '..' segments.");
   }
@@ -124,6 +128,8 @@ export class KDriveClient {
   }
 
   private async rawRequest(endpoint: string, options: RequestOptions = {}): Promise<Response> {
+    const startedAt = Date.now();
+    let refreshedAccessToken = false;
     const makeRequest = async (forceRefresh = false): Promise<Response> => {
       const token = await this.tokenProvider.getAccessToken(forceRefresh);
       const headers = new Headers({ accept: "application/json", authorization: `Bearer ${token}`, ...options.headers });
@@ -143,7 +149,21 @@ export class KDriveClient {
     };
 
     let response = await makeRequest(false);
-    if (response.status === 401) response = await makeRequest(true);
+    if (response.status === 401) {
+      refreshedAccessToken = true;
+      response = await makeRequest(true);
+    }
+    if (options.diagnostics) {
+      console.info({
+        event: "kdrive.api_response",
+        operation: options.diagnostics.operation,
+        traceId: options.diagnostics.traceId,
+        durationMs: Date.now() - startedAt,
+        httpStatus: response.status,
+        ok: response.ok,
+        refreshedAccessToken,
+      });
+    }
     if (!response.ok) {
       const payload = (await response.json().catch(() => undefined)) as ApiEnvelope<unknown> | undefined;
       const message = payload?.error?.description ?? `Infomaniak API request failed with HTTP ${response.status}.`;
@@ -155,6 +175,17 @@ export class KDriveClient {
   private async jsonRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
     const response = await this.rawRequest(endpoint, options);
     const payload = (await response.json()) as ApiEnvelope<T>;
+    if (options.diagnostics) {
+      console.info({
+        event: "kdrive.api_envelope",
+        operation: options.diagnostics.operation,
+        traceId: options.diagnostics.traceId,
+        result: payload?.result,
+        hasData: payload?.data !== undefined && payload?.data !== null,
+        dataType: Array.isArray(payload?.data) ? "array" : typeof payload?.data,
+        errorCode: payload?.error?.code,
+      });
+    }
     if (payload.result === "error") {
       throw new KDriveApiError(
         payload.error?.description ?? "Infomaniak returned an API error.",
@@ -216,9 +247,10 @@ export class KDriveClient {
       let cursor: string | undefined;
       do {
         const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000 });
-        exactMatches.push(...page.data.filter((item) => item.name === segment));
+        exactMatches.push(...page.data.filter((item) => item.name.normalize("NFC") === segment));
         caseInsensitiveMatches.push(...page.data.filter(
-          (item) => item.name !== segment && item.name.toLocaleLowerCase() === segment.toLocaleLowerCase(),
+          (item) => item.name.normalize("NFC") !== segment
+            && item.name.normalize("NFC").toLocaleLowerCase() === segment.toLocaleLowerCase(),
         ));
         cursor = page.has_more ? page.cursor : undefined;
         if (page.has_more && !cursor) throw new Error(`kDrive did not return a cursor while resolving ${normalized}.`);
@@ -305,11 +337,18 @@ export class KDriveClient {
     }
   }
 
-  async createDirectory(driveId: number, parentId: number, name: string, color?: string): Promise<KDriveFile> {
+  async createDirectory(
+    driveId: number,
+    parentId: number,
+    name: string,
+    color?: string,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile> {
     const response = await this.jsonRequest<KDriveFile>(`/3/drive/${driveId}/files/${parentId}/directory`, {
       method: "POST",
       json: { name, ...(color ? { color } : {}) },
       query: { with: "path,capabilities" },
+      ...(diagnostics ? { diagnostics: { operation: "create_directory", traceId: diagnostics.traceId } } : {}),
     });
     if (!response.data) throw new KDriveApiError("Infomaniak did not return the new directory.");
     return response.data;
@@ -352,23 +391,41 @@ export class KDriveClient {
     return response.data ?? true;
   }
 
-  async move(driveId: number, fileId: number, destinationDirectoryId: number): Promise<KDriveFile | boolean> {
+  async move(
+    driveId: number,
+    fileId: number,
+    destinationDirectoryId: number,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile | boolean> {
     const response = await this.jsonRequest<KDriveFile | boolean>(
       `/3/drive/${driveId}/files/${fileId}/move/${destinationDirectoryId}`,
-      { method: "POST", json: { conflict: "error" } },
+      {
+        method: "POST",
+        json: { conflict: "error" },
+        ...(diagnostics ? { diagnostics: { operation: "move", traceId: diagnostics.traceId } } : {}),
+      },
     );
     return response.data ?? true;
   }
 
-  async trash(driveId: number, fileId: number): Promise<boolean> {
-    const response = await this.jsonRequest<boolean>(`/2/drive/${driveId}/files/${fileId}`, { method: "DELETE" });
+  async trash(driveId: number, fileId: number, diagnostics?: { traceId: string }): Promise<boolean> {
+    const response = await this.jsonRequest<boolean>(`/2/drive/${driveId}/files/${fileId}`, {
+      method: "DELETE",
+      ...(diagnostics ? { diagnostics: { operation: "trash", traceId: diagnostics.traceId } } : {}),
+    });
     return response.data ?? true;
   }
 
-  async restore(driveId: number, fileId: number): Promise<KDriveFile | boolean> {
+  async restore(
+    driveId: number,
+    fileId: number,
+    destinationDirectoryId: number,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile | boolean> {
     const response = await this.jsonRequest<KDriveFile | boolean>(`/2/drive/${driveId}/trash/${fileId}/restore`, {
       method: "POST",
-      json: {},
+      json: { destination_directory_id: destinationDirectoryId },
+      ...(diagnostics ? { diagnostics: { operation: "restore", traceId: diagnostics.traceId } } : {}),
     });
     return response.data ?? true;
   }

@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
@@ -24,6 +25,7 @@ import { validateName } from "./safety.js";
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v3.html";
+const KDRIVE_RESULTS_UI_LEGACY_URI = "ui://kdrive/results-v2.html";
 
 const KDRIVE_RESULTS_UI = `
 <!doctype html>
@@ -322,6 +324,30 @@ async function consumePreparedOperation(config: KDriveToolConfig, payload: Opera
   }
 }
 
+function logMutationFailure(
+  action: "move" | "trash" | "restore",
+  traceId: string,
+  stage: string,
+  error: unknown,
+  context: Record<string, unknown>,
+): void {
+  console.error({
+    event: "kdrive.mutation.failed",
+    action,
+    traceId,
+    stage,
+    ...context,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    ...(error && typeof error === "object" && "status" in error
+      ? { httpStatus: (error as { status?: unknown }).status }
+      : {}),
+    ...(error && typeof error === "object" && "code" in error
+      ? { errorCode: (error as { code?: unknown }).code }
+      : {}),
+  });
+}
+
 const kdrivePath = z.string().min(1).max(4096);
 const operationToken = z.string().min(40).max(4096);
 const fileType = z.enum([
@@ -348,22 +374,10 @@ const resultsUiMeta = {
   "openai/toolInvocation/invoked": "kDrive results ready",
 };
 
-export function registerKDriveTools(
-  server: Pick<McpServer, "registerTool">,
-  client: KDriveClient,
-  config: KDriveToolConfig,
-): void {
-  const resourceServer = server as unknown as {
-    registerResource: (
-      name: string,
-      uri: string,
-      metadata: Record<string, never>,
-      read: () => Promise<Record<string, unknown>>,
-    ) => unknown;
-  };
-  resourceServer.registerResource("kdrive-results", KDRIVE_RESULTS_UI_URI, {}, async () => ({
+function kDriveResultsResource(uri: string): Record<string, unknown> {
+  return {
     contents: [{
-      uri: KDRIVE_RESULTS_UI_URI,
+      uri,
       mimeType: "text/html;profile=mcp-app",
       text: KDRIVE_RESULTS_UI,
       _meta: {
@@ -385,7 +399,36 @@ export function registerKDriveTools(
         },
       },
     }],
-  }));
+  };
+}
+
+export function registerKDriveTools(
+  server: Pick<McpServer, "registerTool">,
+  client: KDriveClient,
+  config: KDriveToolConfig,
+): void {
+  const resourceServer = server as unknown as {
+    registerResource: (
+      name: string,
+      uri: string,
+      metadata: Record<string, never>,
+      read: () => Promise<Record<string, unknown>>,
+    ) => unknown;
+  };
+  resourceServer.registerResource(
+    "kdrive-results",
+    KDRIVE_RESULTS_UI_URI,
+    {},
+    async () => kDriveResultsResource(KDRIVE_RESULTS_UI_URI),
+  );
+  // Older ChatGPT clients may retain the previous resource URI after a connector update.
+  // Keep the alias serving the current UI so stale clients recover without losing results.
+  resourceServer.registerResource(
+    "kdrive-results-v2-compatibility",
+    KDRIVE_RESULTS_UI_LEGACY_URI,
+    {},
+    async () => kDriveResultsResource(KDRIVE_RESULTS_UI_LEGACY_URI),
+  );
 
   server.registerTool(
     "kdrive_connection_status",
@@ -548,13 +591,76 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async (input) => tool(async () => {
-      if (input.path && (input.parentPath || input.name)) {
-        throw new Error("Provide a full path, or a parent path and name, not both.");
+      const traceId = randomUUID();
+      let stage = "validate_input";
+      console.info({
+        event: "kdrive.create.begin",
+        traceId,
+        inputMode: input.path ? "path" : "parent_and_name",
+        hasPath: Boolean(input.path),
+        hasParentPath: Boolean(input.parentPath),
+        hasName: Boolean(input.name),
+        hasColor: Boolean(input.color),
+      });
+
+      try {
+        if (input.path && (input.parentPath || input.name)) {
+          throw new Error("Provide a full path, or a parent path and name, not both.");
+        }
+        const destination = input.path ? splitKDrivePath(input.path) : undefined;
+        const name = validateName(destination?.name ?? input.name ?? "");
+        const parentPath = destination?.parentPath ?? input.parentPath;
+
+        stage = "resolve_parent";
+        const parent = await resolveDestination(client, config.driveId, parentPath);
+        console.info({
+          event: "kdrive.create.parent_resolved",
+          traceId,
+          parentPath: displayPath(parent),
+          parentId: parent.id,
+          parentType: parent.type,
+        });
+
+        stage = "infomaniak_request";
+        console.info({
+          event: "kdrive.create.api_request",
+          traceId,
+          method: "POST",
+          endpointTemplate: "/3/drive/{driveId}/files/{parentId}/directory",
+          folderName: name,
+          hasColor: Boolean(input.color),
+        });
+        const created = await client.createDirectory(config.driveId, parent.id, name, input.color, { traceId });
+
+        stage = "build_mcp_result";
+        const result = await cleanItem(created, config);
+        console.info({
+          event: "kdrive.create.mcp_result",
+          traceId,
+          isError: false,
+          itemType: result.type,
+          resultKeys: Object.keys(result).sort(),
+        });
+        return result;
+      } catch (error) {
+        const details = error instanceof Error
+          ? { errorName: error.name, errorMessage: error.message, errorStack: error.stack }
+          : { errorName: typeof error, errorMessage: String(error) };
+        console.error({
+          event: "kdrive.create.exception",
+          traceId,
+          stage,
+          ...details,
+          ...(error && typeof error === "object" && "status" in error
+            ? { httpStatus: (error as { status?: unknown }).status }
+            : {}),
+          ...(error && typeof error === "object" && "code" in error
+            ? { errorCode: (error as { code?: unknown }).code }
+            : {}),
+        });
+        console.info({ event: "kdrive.create.mcp_result", traceId, isError: true, stage });
+        throw error;
       }
-      const destination = input.path ? splitKDrivePath(input.path) : undefined;
-      const name = validateName(destination?.name ?? input.name ?? "");
-      const parent = await resolveDestination(client, config.driveId, destination?.parentPath ?? input.parentPath);
-      return cleanItem(await client.createDirectory(config.driveId, parent.id, name, input.color), config);
     }),
   );
 
@@ -696,14 +802,34 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ path, destinationPath, operationToken }) => tool(async () => {
-      const { file, payload } = await verifyPreparedOperation(client, config, "move", path, operationToken);
-      const destination = await resolveDestination(client, config.driveId, destinationPath);
-      if (payload.destinationId !== destination.id || payload.destinationPath !== displayPath(destination)) {
-        throw new Error("The destination does not match the prepared kDrive action.");
+      const traceId = randomUUID();
+      let stage = "verify_prepared_operation";
+      const context = {
+        path: normalizeKDrivePath(path),
+        destinationPath: normalizeKDrivePath(destinationPath),
+        operationTokenLength: operationToken.length,
+      };
+      console.info({ event: "kdrive.mutation.begin", action: "move", traceId, ...context });
+      try {
+        const { file, payload } = await verifyPreparedOperation(client, config, "move", path, operationToken);
+        stage = "resolve_destination";
+        const destination = await resolveDestination(client, config.driveId, destinationPath);
+        stage = "validate_destination_binding";
+        if (payload.destinationId !== destination.id || payload.destinationPath !== displayPath(destination)) {
+          throw new Error("The destination does not match the prepared kDrive action.");
+        }
+        stage = "consume_operation_nonce";
+        await consumePreparedOperation(config, payload);
+        stage = "infomaniak_request";
+        await client.move(config.driveId, file.id, destination.id, { traceId });
+        stage = "read_mutation_result";
+        const result = await resultAfterMutation(client, config, file.id);
+        console.info({ event: "kdrive.mutation.succeeded", action: "move", traceId });
+        return result;
+      } catch (error) {
+        logMutationFailure("move", traceId, stage, error, context);
+        throw error;
       }
-      await consumePreparedOperation(config, payload);
-      await client.move(config.driveId, file.id, destination.id);
-      return resultAfterMutation(client, config, file.id);
     }),
   );
 
@@ -744,21 +870,45 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     },
     async ({ path, operationToken }) => tool(async () => {
-      const { file, payload } = await verifyPreparedOperation(client, config, "trash", path, operationToken);
-      const undoPayload = createRestorePayload({
-        driveId: config.driveId,
-        fileId: file.id,
-        originalPath: displayPath(file),
-      }, config.undoTtlMs ?? DEFAULT_UNDO_TTL_MS);
-      const undoToken = await signKDrivePayload(config.operationSecret, undoPayload);
-      await consumePreparedOperation(config, payload);
-      await client.trash(config.driveId, file.id);
-      return {
-        trashedPath: displayPath(file),
-        recoverable: true,
-        undoToken,
-        undoAvailableUntil: new Date(undoPayload.expiresAt).toISOString(),
+      const traceId = randomUUID();
+      let stage = "verify_prepared_operation";
+      const context = {
+        path: normalizeKDrivePath(path),
+        operationTokenLength: operationToken.length,
       };
+      console.info({ event: "kdrive.mutation.begin", action: "trash", traceId, ...context });
+      try {
+        const { file, payload } = await verifyPreparedOperation(client, config, "trash", path, operationToken);
+        const trashedPath = displayPath(file);
+        stage = "resolve_restore_destination";
+        const originalParent = await resolveDestination(
+          client,
+          config.driveId,
+          splitKDrivePath(trashedPath).parentPath,
+        );
+        stage = "create_undo_token";
+        const undoPayload = createRestorePayload({
+          driveId: config.driveId,
+          fileId: file.id,
+          destinationDirectoryId: originalParent.id,
+          originalPath: trashedPath,
+        }, config.undoTtlMs ?? DEFAULT_UNDO_TTL_MS);
+        const undoToken = await signKDrivePayload(config.operationSecret, undoPayload);
+        stage = "consume_operation_nonce";
+        await consumePreparedOperation(config, payload);
+        stage = "infomaniak_request";
+        await client.trash(config.driveId, file.id, { traceId });
+        console.info({ event: "kdrive.mutation.succeeded", action: "trash", traceId });
+        return {
+          trashedPath,
+          recoverable: true,
+          undoToken,
+          undoAvailableUntil: new Date(undoPayload.expiresAt).toISOString(),
+        };
+      } catch (error) {
+        logMutationFailure("trash", traceId, stage, error, context);
+        throw error;
+      }
     }),
   );
 
@@ -771,10 +921,22 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ undoToken }) => tool(async () => {
-      const payload = await verifyKDrivePayload(config.operationSecret, undoToken);
-      assertRestorePayload(payload, config.driveId);
-      await client.restore(config.driveId, payload.fileId);
-      return resultAfterMutation(client, config, payload.fileId);
+      const traceId = randomUUID();
+      let stage = "verify_undo_token";
+      const context = { undoTokenLength: undoToken.length };
+      try {
+        const payload = await verifyKDrivePayload(config.operationSecret, undoToken);
+        assertRestorePayload(payload, config.driveId);
+        stage = "infomaniak_request";
+        await client.restore(config.driveId, payload.fileId, payload.destinationDirectoryId, { traceId });
+        stage = "read_mutation_result";
+        const result = await resultAfterMutation(client, config, payload.fileId);
+        console.info({ event: "kdrive.mutation.succeeded", action: "restore", traceId });
+        return result;
+      } catch (error) {
+        logMutationFailure("restore", traceId, stage, error, context);
+        throw error;
+      }
     }),
   );
 }
