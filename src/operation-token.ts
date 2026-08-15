@@ -27,6 +27,7 @@ export interface RestoreTokenPayload {
   type: "restore";
   driveId: number;
   fileId: number;
+  destinationDirectoryId: number;
   originalPath: string;
   issuedAt: number;
   expiresAt: number;
@@ -209,6 +210,22 @@ export function assertOperationPayload(
   if (!payload.jti || typeof payload.jti !== "string") throw new Error("Invalid operation nonce.");
   assertSafePositiveInteger(payload.sourceId, "source ID");
   if (!payload.sourcePath || typeof payload.sourcePath !== "string") throw new Error("Invalid source path.");
+  if (normalizeSignedPath(payload.sourcePath) !== payload.sourcePath) throw new Error("Invalid normalized source path.");
+  if (action === "move") {
+    assertSafePositiveInteger(payload.destinationId, "destination ID");
+    if (!payload.destinationPath || typeof payload.destinationPath !== "string") {
+      throw new Error("Invalid destination path.");
+    }
+    if (normalizeSignedPath(payload.destinationPath) !== payload.destinationPath) {
+      throw new Error("Invalid normalized destination path.");
+    }
+  }
+  if (action === "rename" && (!payload.name || typeof payload.name !== "string")) {
+    throw new Error("Invalid rename target.");
+  }
+  if (action === "overwrite" && (!payload.contentDigest || typeof payload.contentDigest !== "string")) {
+    throw new Error("Invalid replacement content digest.");
+  }
 }
 
 export function assertRestorePayload(
@@ -217,7 +234,13 @@ export function assertRestorePayload(
 ): asserts payload is RestoreTokenPayload {
   if (payload.type !== "restore" || payload.driveId !== driveId) throw new Error("This undo token is not valid here.");
   assertSafePositiveInteger(payload.fileId, "file ID");
+  assertSafePositiveInteger(payload.destinationDirectoryId, "restore destination ID");
   if (!payload.originalPath || typeof payload.originalPath !== "string") throw new Error("Invalid restore path.");
+}
+
+function normalizeSignedPath(path: string): string {
+  const segments = path.trim().split("/").filter(Boolean).map((segment) => segment.normalize("NFC"));
+  return segments.length === 0 ? "/" : `/${segments.join("/")}`;
 }
 
 export function assertOpenPayload(payload: KDriveSignedPayload): asserts payload is OpenTokenPayload {

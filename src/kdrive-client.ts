@@ -52,7 +52,7 @@ interface RequestOptions {
   json?: unknown;
   body?: Uint8Array;
   diagnostics?: {
-    operation: "create_directory";
+    operation: "create_directory" | "move" | "trash" | "restore";
     traceId: string;
   };
 }
@@ -70,7 +70,7 @@ export function normalizeKDrivePath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) throw new Error("A kDrive path is required.");
   if (trimmed.includes("\\")) throw new Error("Use forward slashes in kDrive paths.");
-  const segments = trimmed.split("/").filter(Boolean);
+  const segments = trimmed.split("/").filter(Boolean).map((segment) => segment.normalize("NFC"));
   if (segments.some((segment) => segment === "." || segment === "..")) {
     throw new Error("kDrive paths cannot contain '.' or '..' segments.");
   }
@@ -247,9 +247,10 @@ export class KDriveClient {
       let cursor: string | undefined;
       do {
         const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000 });
-        exactMatches.push(...page.data.filter((item) => item.name === segment));
+        exactMatches.push(...page.data.filter((item) => item.name.normalize("NFC") === segment));
         caseInsensitiveMatches.push(...page.data.filter(
-          (item) => item.name !== segment && item.name.toLocaleLowerCase() === segment.toLocaleLowerCase(),
+          (item) => item.name.normalize("NFC") !== segment
+            && item.name.normalize("NFC").toLocaleLowerCase() === segment.toLocaleLowerCase(),
         ));
         cursor = page.has_more ? page.cursor : undefined;
         if (page.has_more && !cursor) throw new Error(`kDrive did not return a cursor while resolving ${normalized}.`);
@@ -390,23 +391,41 @@ export class KDriveClient {
     return response.data ?? true;
   }
 
-  async move(driveId: number, fileId: number, destinationDirectoryId: number): Promise<KDriveFile | boolean> {
+  async move(
+    driveId: number,
+    fileId: number,
+    destinationDirectoryId: number,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile | boolean> {
     const response = await this.jsonRequest<KDriveFile | boolean>(
       `/3/drive/${driveId}/files/${fileId}/move/${destinationDirectoryId}`,
-      { method: "POST", json: { conflict: "error" } },
+      {
+        method: "POST",
+        json: { conflict: "error" },
+        ...(diagnostics ? { diagnostics: { operation: "move", traceId: diagnostics.traceId } } : {}),
+      },
     );
     return response.data ?? true;
   }
 
-  async trash(driveId: number, fileId: number): Promise<boolean> {
-    const response = await this.jsonRequest<boolean>(`/2/drive/${driveId}/files/${fileId}`, { method: "DELETE" });
+  async trash(driveId: number, fileId: number, diagnostics?: { traceId: string }): Promise<boolean> {
+    const response = await this.jsonRequest<boolean>(`/2/drive/${driveId}/files/${fileId}`, {
+      method: "DELETE",
+      ...(diagnostics ? { diagnostics: { operation: "trash", traceId: diagnostics.traceId } } : {}),
+    });
     return response.data ?? true;
   }
 
-  async restore(driveId: number, fileId: number): Promise<KDriveFile | boolean> {
+  async restore(
+    driveId: number,
+    fileId: number,
+    destinationDirectoryId: number,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile | boolean> {
     const response = await this.jsonRequest<KDriveFile | boolean>(`/2/drive/${driveId}/trash/${fileId}/restore`, {
       method: "POST",
-      json: {},
+      json: { destination_directory_id: destinationDirectoryId },
+      ...(diagnostics ? { diagnostics: { operation: "restore", traceId: diagnostics.traceId } } : {}),
     });
     return response.data ?? true;
   }

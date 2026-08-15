@@ -324,6 +324,30 @@ async function consumePreparedOperation(config: KDriveToolConfig, payload: Opera
   }
 }
 
+function logMutationFailure(
+  action: "move" | "trash" | "restore",
+  traceId: string,
+  stage: string,
+  error: unknown,
+  context: Record<string, unknown>,
+): void {
+  console.error({
+    event: "kdrive.mutation.failed",
+    action,
+    traceId,
+    stage,
+    ...context,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    ...(error && typeof error === "object" && "status" in error
+      ? { httpStatus: (error as { status?: unknown }).status }
+      : {}),
+    ...(error && typeof error === "object" && "code" in error
+      ? { errorCode: (error as { code?: unknown }).code }
+      : {}),
+  });
+}
+
 const kdrivePath = z.string().min(1).max(4096);
 const operationToken = z.string().min(40).max(4096);
 const fileType = z.enum([
@@ -778,14 +802,34 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ path, destinationPath, operationToken }) => tool(async () => {
-      const { file, payload } = await verifyPreparedOperation(client, config, "move", path, operationToken);
-      const destination = await resolveDestination(client, config.driveId, destinationPath);
-      if (payload.destinationId !== destination.id || payload.destinationPath !== displayPath(destination)) {
-        throw new Error("The destination does not match the prepared kDrive action.");
+      const traceId = randomUUID();
+      let stage = "verify_prepared_operation";
+      const context = {
+        path: normalizeKDrivePath(path),
+        destinationPath: normalizeKDrivePath(destinationPath),
+        operationTokenLength: operationToken.length,
+      };
+      console.info({ event: "kdrive.mutation.begin", action: "move", traceId, ...context });
+      try {
+        const { file, payload } = await verifyPreparedOperation(client, config, "move", path, operationToken);
+        stage = "resolve_destination";
+        const destination = await resolveDestination(client, config.driveId, destinationPath);
+        stage = "validate_destination_binding";
+        if (payload.destinationId !== destination.id || payload.destinationPath !== displayPath(destination)) {
+          throw new Error("The destination does not match the prepared kDrive action.");
+        }
+        stage = "consume_operation_nonce";
+        await consumePreparedOperation(config, payload);
+        stage = "infomaniak_request";
+        await client.move(config.driveId, file.id, destination.id, { traceId });
+        stage = "read_mutation_result";
+        const result = await resultAfterMutation(client, config, file.id);
+        console.info({ event: "kdrive.mutation.succeeded", action: "move", traceId });
+        return result;
+      } catch (error) {
+        logMutationFailure("move", traceId, stage, error, context);
+        throw error;
       }
-      await consumePreparedOperation(config, payload);
-      await client.move(config.driveId, file.id, destination.id);
-      return resultAfterMutation(client, config, file.id);
     }),
   );
 
@@ -826,21 +870,45 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     },
     async ({ path, operationToken }) => tool(async () => {
-      const { file, payload } = await verifyPreparedOperation(client, config, "trash", path, operationToken);
-      const undoPayload = createRestorePayload({
-        driveId: config.driveId,
-        fileId: file.id,
-        originalPath: displayPath(file),
-      }, config.undoTtlMs ?? DEFAULT_UNDO_TTL_MS);
-      const undoToken = await signKDrivePayload(config.operationSecret, undoPayload);
-      await consumePreparedOperation(config, payload);
-      await client.trash(config.driveId, file.id);
-      return {
-        trashedPath: displayPath(file),
-        recoverable: true,
-        undoToken,
-        undoAvailableUntil: new Date(undoPayload.expiresAt).toISOString(),
+      const traceId = randomUUID();
+      let stage = "verify_prepared_operation";
+      const context = {
+        path: normalizeKDrivePath(path),
+        operationTokenLength: operationToken.length,
       };
+      console.info({ event: "kdrive.mutation.begin", action: "trash", traceId, ...context });
+      try {
+        const { file, payload } = await verifyPreparedOperation(client, config, "trash", path, operationToken);
+        const trashedPath = displayPath(file);
+        stage = "resolve_restore_destination";
+        const originalParent = await resolveDestination(
+          client,
+          config.driveId,
+          splitKDrivePath(trashedPath).parentPath,
+        );
+        stage = "create_undo_token";
+        const undoPayload = createRestorePayload({
+          driveId: config.driveId,
+          fileId: file.id,
+          destinationDirectoryId: originalParent.id,
+          originalPath: trashedPath,
+        }, config.undoTtlMs ?? DEFAULT_UNDO_TTL_MS);
+        const undoToken = await signKDrivePayload(config.operationSecret, undoPayload);
+        stage = "consume_operation_nonce";
+        await consumePreparedOperation(config, payload);
+        stage = "infomaniak_request";
+        await client.trash(config.driveId, file.id, { traceId });
+        console.info({ event: "kdrive.mutation.succeeded", action: "trash", traceId });
+        return {
+          trashedPath,
+          recoverable: true,
+          undoToken,
+          undoAvailableUntil: new Date(undoPayload.expiresAt).toISOString(),
+        };
+      } catch (error) {
+        logMutationFailure("trash", traceId, stage, error, context);
+        throw error;
+      }
     }),
   );
 
@@ -853,10 +921,22 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ undoToken }) => tool(async () => {
-      const payload = await verifyKDrivePayload(config.operationSecret, undoToken);
-      assertRestorePayload(payload, config.driveId);
-      await client.restore(config.driveId, payload.fileId);
-      return resultAfterMutation(client, config, payload.fileId);
+      const traceId = randomUUID();
+      let stage = "verify_undo_token";
+      const context = { undoTokenLength: undoToken.length };
+      try {
+        const payload = await verifyKDrivePayload(config.operationSecret, undoToken);
+        assertRestorePayload(payload, config.driveId);
+        stage = "infomaniak_request";
+        await client.restore(config.driveId, payload.fileId, payload.destinationDirectoryId, { traceId });
+        stage = "read_mutation_result";
+        const result = await resultAfterMutation(client, config, payload.fileId);
+        console.info({ event: "kdrive.mutation.succeeded", action: "restore", traceId });
+        return result;
+      } catch (error) {
+        logMutationFailure("restore", traceId, stage, error, context);
+        throw error;
+      }
     }),
   );
 }

@@ -8,6 +8,7 @@ import { createOpenPayload, signKDrivePayload } from "../../src/operation-token.
 import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
 import type { Props } from "./utils";
+export { KDriveOperationNonceStore } from "./operation-nonce-store";
 
 function positiveInteger(value: string, name: string): number {
 	const parsed = Number(value);
@@ -45,23 +46,12 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		const client = new KDriveClient(config, {
 			getAccessToken: async () => this.env.KDRIVE_ACCESS_TOKEN,
 		});
-		this.sql`CREATE TABLE IF NOT EXISTS kdrive_operation_nonces (
-			jti TEXT PRIMARY KEY,
-			expires_at INTEGER NOT NULL
-		)`;
+		const sharedNonceStore = this.env.KDRIVE_OPERATION_NONCES.getByName(
+			`${this.props.login.toLowerCase()}:${driveId}`,
+		);
 		const nonceStore = {
-			issue: (jti: string, expiresAt: number) => {
-				this.sql`DELETE FROM kdrive_operation_nonces WHERE expires_at < ${Date.now()}`;
-				this.sql`INSERT INTO kdrive_operation_nonces (jti, expires_at) VALUES (${jti}, ${expiresAt})`;
-			},
-			consume: (jti: string, now: number) => {
-				const consumed = this.sql<{ jti: string }>`
-					DELETE FROM kdrive_operation_nonces
-					WHERE jti = ${jti} AND expires_at >= ${now}
-					RETURNING jti
-				`;
-				return consumed.length === 1;
-			},
+			issue: (jti: string, expiresAt: number) => sharedNonceStore.issue(jti, expiresAt),
+			consume: (jti: string, now: number) => sharedNonceStore.consume(jti, now),
 		};
 		const connectorBaseUrl = new URL(this.env.KDRIVE_CONNECTOR_BASE_URL).origin;
 
