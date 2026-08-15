@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
@@ -548,13 +549,76 @@ export function registerKDriveTools(
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async (input) => tool(async () => {
-      if (input.path && (input.parentPath || input.name)) {
-        throw new Error("Provide a full path, or a parent path and name, not both.");
+      const traceId = randomUUID();
+      let stage = "validate_input";
+      console.info({
+        event: "kdrive.create.begin",
+        traceId,
+        inputMode: input.path ? "path" : "parent_and_name",
+        hasPath: Boolean(input.path),
+        hasParentPath: Boolean(input.parentPath),
+        hasName: Boolean(input.name),
+        hasColor: Boolean(input.color),
+      });
+
+      try {
+        if (input.path && (input.parentPath || input.name)) {
+          throw new Error("Provide a full path, or a parent path and name, not both.");
+        }
+        const destination = input.path ? splitKDrivePath(input.path) : undefined;
+        const name = validateName(destination?.name ?? input.name ?? "");
+        const parentPath = destination?.parentPath ?? input.parentPath;
+
+        stage = "resolve_parent";
+        const parent = await resolveDestination(client, config.driveId, parentPath);
+        console.info({
+          event: "kdrive.create.parent_resolved",
+          traceId,
+          parentPath: displayPath(parent),
+          parentId: parent.id,
+          parentType: parent.type,
+        });
+
+        stage = "infomaniak_request";
+        console.info({
+          event: "kdrive.create.api_request",
+          traceId,
+          method: "POST",
+          endpointTemplate: "/3/drive/{driveId}/files/{parentId}/directory",
+          folderName: name,
+          hasColor: Boolean(input.color),
+        });
+        const created = await client.createDirectory(config.driveId, parent.id, name, input.color, { traceId });
+
+        stage = "build_mcp_result";
+        const result = await cleanItem(created, config);
+        console.info({
+          event: "kdrive.create.mcp_result",
+          traceId,
+          isError: false,
+          itemType: result.type,
+          resultKeys: Object.keys(result).sort(),
+        });
+        return result;
+      } catch (error) {
+        const details = error instanceof Error
+          ? { errorName: error.name, errorMessage: error.message, errorStack: error.stack }
+          : { errorName: typeof error, errorMessage: String(error) };
+        console.error({
+          event: "kdrive.create.exception",
+          traceId,
+          stage,
+          ...details,
+          ...(error && typeof error === "object" && "status" in error
+            ? { httpStatus: (error as { status?: unknown }).status }
+            : {}),
+          ...(error && typeof error === "object" && "code" in error
+            ? { errorCode: (error as { code?: unknown }).code }
+            : {}),
+        });
+        console.info({ event: "kdrive.create.mcp_result", traceId, isError: true, stage });
+        throw error;
       }
-      const destination = input.path ? splitKDrivePath(input.path) : undefined;
-      const name = validateName(destination?.name ?? input.name ?? "");
-      const parent = await resolveDestination(client, config.driveId, destination?.parentPath ?? input.parentPath);
-      return cleanItem(await client.createDirectory(config.driveId, parent.id, name, input.color), config);
     }),
   );
 

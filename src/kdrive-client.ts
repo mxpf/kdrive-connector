@@ -51,6 +51,10 @@ interface RequestOptions {
   headers?: Record<string, string>;
   json?: unknown;
   body?: Uint8Array;
+  diagnostics?: {
+    operation: "create_directory";
+    traceId: string;
+  };
 }
 
 export interface DownloadResult {
@@ -124,6 +128,8 @@ export class KDriveClient {
   }
 
   private async rawRequest(endpoint: string, options: RequestOptions = {}): Promise<Response> {
+    const startedAt = Date.now();
+    let refreshedAccessToken = false;
     const makeRequest = async (forceRefresh = false): Promise<Response> => {
       const token = await this.tokenProvider.getAccessToken(forceRefresh);
       const headers = new Headers({ accept: "application/json", authorization: `Bearer ${token}`, ...options.headers });
@@ -143,7 +149,21 @@ export class KDriveClient {
     };
 
     let response = await makeRequest(false);
-    if (response.status === 401) response = await makeRequest(true);
+    if (response.status === 401) {
+      refreshedAccessToken = true;
+      response = await makeRequest(true);
+    }
+    if (options.diagnostics) {
+      console.info({
+        event: "kdrive.api_response",
+        operation: options.diagnostics.operation,
+        traceId: options.diagnostics.traceId,
+        durationMs: Date.now() - startedAt,
+        httpStatus: response.status,
+        ok: response.ok,
+        refreshedAccessToken,
+      });
+    }
     if (!response.ok) {
       const payload = (await response.json().catch(() => undefined)) as ApiEnvelope<unknown> | undefined;
       const message = payload?.error?.description ?? `Infomaniak API request failed with HTTP ${response.status}.`;
@@ -155,6 +175,17 @@ export class KDriveClient {
   private async jsonRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
     const response = await this.rawRequest(endpoint, options);
     const payload = (await response.json()) as ApiEnvelope<T>;
+    if (options.diagnostics) {
+      console.info({
+        event: "kdrive.api_envelope",
+        operation: options.diagnostics.operation,
+        traceId: options.diagnostics.traceId,
+        result: payload?.result,
+        hasData: payload?.data !== undefined && payload?.data !== null,
+        dataType: Array.isArray(payload?.data) ? "array" : typeof payload?.data,
+        errorCode: payload?.error?.code,
+      });
+    }
     if (payload.result === "error") {
       throw new KDriveApiError(
         payload.error?.description ?? "Infomaniak returned an API error.",
@@ -305,11 +336,18 @@ export class KDriveClient {
     }
   }
 
-  async createDirectory(driveId: number, parentId: number, name: string, color?: string): Promise<KDriveFile> {
+  async createDirectory(
+    driveId: number,
+    parentId: number,
+    name: string,
+    color?: string,
+    diagnostics?: { traceId: string },
+  ): Promise<KDriveFile> {
     const response = await this.jsonRequest<KDriveFile>(`/3/drive/${driveId}/files/${parentId}/directory`, {
       method: "POST",
       json: { name, ...(color ? { color } : {}) },
       query: { with: "path,capabilities" },
+      ...(diagnostics ? { diagnostics: { operation: "create_directory", traceId: diagnostics.traceId } } : {}),
     });
     if (!response.data) throw new KDriveApiError("Infomaniak did not return the new directory.");
     return response.data;
