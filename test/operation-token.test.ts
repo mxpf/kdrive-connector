@@ -55,13 +55,28 @@ test("overwrite content digests bind exact bytes and encoding", async () => {
   assert.equal(await sha256Base64Url(utf8), await sha256Base64Url(new Uint8Array(utf8)));
 });
 
-test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
+test("public kDrive tool schemas expose paths but no IDs or ETags", async () => {
   const registrations = new Map<string, Record<string, unknown>>();
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
   let resourceRegistrations = 0;
+  let readResultsResource: (() => Promise<Record<string, unknown>>) | undefined;
   const fakeServer = {
-    registerResource() { resourceRegistrations += 1; },
-    registerTool(name: string, definition: Record<string, unknown>) {
+    registerResource(
+      _name: string,
+      _uri: string,
+      _metadata: Record<string, never>,
+      read: () => Promise<Record<string, unknown>>,
+    ) {
+      resourceRegistrations += 1;
+      readResultsResource = read;
+    },
+    registerTool(
+      name: string,
+      definition: Record<string, unknown>,
+      handler: (...args: unknown[]) => unknown,
+    ) {
       registrations.set(name, definition);
+      handlers.set(name, handler);
     },
   } as unknown as Pick<McpServer, "registerTool">;
 
@@ -72,7 +87,11 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
     operationSecret: generateOperationSecret(),
     nonceStore: new MemoryOperationNonceStore(),
     buildOpenUrl: () => "https://example.test/open/opaque",
-    connectionStatus: async () => ({ connected: true }),
+    connectionStatus: async () => ({
+      connected: true,
+      name: "kDrive",
+      openUrl: "https://example.test/open/opaque",
+    }),
   });
 
   assert.equal(registrations.size, 13);
@@ -90,7 +109,21 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", () => {
   );
   assert.equal(
     ((registrations.get("kdrive_search")!._meta as Record<string, unknown>).ui as Record<string, unknown>).resourceUri,
-    "ui://kdrive/results-v2.html",
+    "ui://kdrive/results-v3.html",
   );
   assert.ok(registrations.get("kdrive_search")!.outputSchema);
+  assert.ok(readResultsResource);
+  const resource = await readResultsResource();
+  const contents = resource.contents as Array<{ text?: string }>;
+  assert.match(contents[0]?.text ?? "", /notifyIntrinsicHeight/);
+  assert.match(contents[0]?.text ?? "", /ui\/notifications\/size-changed/);
+  assert.match(contents[0]?.text ?? "", /ResizeObserver/);
+
+  const status = await handlers.get("kdrive_connection_status")?.() as {
+    content: Array<{ type: string; text?: string }>;
+  };
+  assert.equal(status.content.length, 1);
+  assert.equal(status.content[0]?.type, "text");
+  assert.match(status.content[0]?.text ?? "", /\[Open kDrive in kDrive\]\(https:\/\/example\.test\/open\/opaque\)/);
+  assert.equal(status.content.some((item) => item.type === "resource_link"), false);
 });
