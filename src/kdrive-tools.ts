@@ -170,7 +170,7 @@ function collectOpenLinks(value: unknown, links: OpenLink[] = []): OpenLink[] {
   return links;
 }
 
-function jsonContent(value: unknown) {
+function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {}) {
   const links = [...new Map(collectOpenLinks(value).map((link) => [link.url, link])).values()];
   const linkSection = links.length > 0
     ? `\n\nClickable kDrive links (preserve these exact Markdown links in the user-facing response):\n${links.map((link) => `- [${markdownLabel(`Open ${link.name} in kDrive`)}](${link.url})`).join("\n")}`
@@ -179,7 +179,17 @@ function jsonContent(value: unknown) {
     structuredContent: value && typeof value === "object" && !Array.isArray(value)
       ? value as Record<string, unknown>
       : { value },
-    content: [{ type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` }],
+    content: [
+      { type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` },
+      ...(options.materializeLinks ? links.map((link) => ({
+        type: "resource_link" as const,
+        uri: link.url,
+        name: link.name,
+        title: `Download ${link.name} from kDrive`,
+        ...(link.path ? { description: link.path } : {}),
+        ...(link.mimeType ? { mimeType: link.mimeType } : {}),
+      })) : []),
+    ],
   };
 }
 
@@ -188,8 +198,8 @@ function errorContent(error: unknown) {
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }
 
-function tool<T>(handler: () => Promise<T>) {
-  return handler().then(jsonContent).catch(errorContent);
+function tool<T>(handler: () => Promise<T>, options: { materializeLinks?: boolean } = {}) {
+  return handler().then((value) => jsonContent(value, options)).catch(errorContent);
 }
 
 function displayPath(file: KDriveFile): string {
@@ -500,7 +510,7 @@ export function registerKDriveTools(
     "kdrive_read_file",
     {
       title: "Read a kDrive file",
-      description: "Use to read or summarize one known kDrive file by path. Returns converted text when supported or base64 only when explicitly requested.",
+      description: "Use to read or summarize one known kDrive file by path. Prefer text. Request base64 only once when the actual file attachment is needed for rendered-page or binary inspection; that mode may require native download approval.",
       inputSchema: { path: kdrivePath, mode: z.enum(["text", "base64"]).default("text") },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
@@ -521,7 +531,7 @@ export function registerKDriveTools(
         ...(mode === "text" && "textSource" in result ? { textSource: result.textSource } : {}),
         content: mode === "text" ? new TextDecoder().decode(result.bytes) : Buffer.from(result.bytes).toString("base64"),
       };
-    }),
+    }, { materializeLinks: mode === "base64" }),
   );
 
   server.registerTool(

@@ -80,7 +80,21 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     },
   } as unknown as Pick<McpServer, "registerTool">;
 
-  registerKDriveTools(fakeServer, {} as KDriveClient, {
+  const fakeClient = {
+    resolvePath: async () => ({
+      id: 7,
+      name: "resume.pdf",
+      path: "/Private/resume.pdf",
+      type: "pdf",
+      mime_type: "application/pdf",
+    }),
+    download: async () => ({
+      bytes: new Uint8Array([37, 80, 68, 70]),
+      contentType: "application/pdf",
+    }),
+  } as unknown as KDriveClient;
+
+  registerKDriveTools(fakeServer, fakeClient, {
     driveId: 42,
     maxReadBytes: 1_000,
     maxUploadBytes: 1_000,
@@ -126,4 +140,10 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   assert.equal(status.content[0]?.type, "text");
   assert.match(status.content[0]?.text ?? "", /\[Open kDrive in kDrive\]\(https:\/\/example\.test\/open\/opaque\)/);
   assert.equal(status.content.some((item) => item.type === "resource_link"), false);
+
+  const file = await handlers.get("kdrive_read_file")?.({
+    path: "/Private/resume.pdf",
+    mode: "base64",
+  }) as { content: Array<{ type: string }> };
+  assert.equal(file.content.filter((item) => item.type === "resource_link").length, 1);
 });

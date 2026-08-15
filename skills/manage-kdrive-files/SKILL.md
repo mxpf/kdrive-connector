@@ -11,6 +11,7 @@ Use the kDrive MCP tools as a natural file workspace. Work entirely with paths a
 
 - To find something, search by the user's words and narrow by a known folder path when useful. Use the returned preview to distinguish likely matches. If multiple plausible results remain, show concise paths or ask one short clarifying question.
 - To inspect a known location, list or read it by path.
+- For ordinary review and summarization, read text and reuse that result. Request a base64 read only when rendered pages or binary bytes are genuinely required, and do it once after selecting the exact file; this is the one path that may invoke the host's native file-download approval.
 - To create or upload, prefer a complete destination path. New files must use conflict-safe behavior unless the user explicitly asks for an automatically renamed copy.
 - To rename, move, replace, or trash, call `kdrive_prepare_change` internally and immediately follow it with the matching write tool using the returned operation token and identical readable arguments.
 - To replace contents, keep the connector's target and version binding enabled. Never convert an upload into an overwrite.
@@ -25,6 +26,7 @@ Use the kDrive MCP tools as a natural file workspace. Work entirely with paths a
 4. Do not broaden a write. For example, “rename this file” does not authorize moving its folder or replacing its contents.
 5. Report outcomes with names and paths. When useful, render the returned URL as `[Open in kDrive](...)`; never create a public share link merely to make a result clickable.
 6. Preserve existing files by default. Do not convert an upload into an overwrite, and do not retry a conflict with a more destructive operation without asking.
+7. Do not materialize search or directory results. Narrow to one file first, then materialize it at most once if a downstream visual or binary-file tool requires the actual attachment.
 
 ## Result style
 
