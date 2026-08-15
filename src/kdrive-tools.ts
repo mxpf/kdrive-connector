@@ -23,7 +23,7 @@ import { validateName } from "./safety.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v2.html";
+const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v3.html";
 
 const KDRIVE_RESULTS_UI = `
 <!doctype html>
@@ -47,6 +47,24 @@ const KDRIVE_RESULTS_UI = `
   <div id="root"><div class="empty">Loading kDrive results…</div></div>
   <script>
     const root = document.getElementById("root");
+    let heightFrame;
+    let lastSize = "";
+    function notifyHeight() {
+      cancelAnimationFrame(heightFrame);
+      heightFrame = requestAnimationFrame(() => {
+        const width = Math.max(1, Math.ceil(root.getBoundingClientRect().width));
+        const height = Math.max(1, Math.ceil(root.getBoundingClientRect().height + 20));
+        const nextSize = width + "x" + height;
+        if (nextSize === lastSize) return;
+        lastSize = nextSize;
+        window.parent.postMessage({
+          jsonrpc: "2.0",
+          method: "ui/notifications/size-changed",
+          params: { width, height },
+        }, "*");
+        window.openai?.notifyIntrinsicHeight?.({ height });
+      });
+    }
     function render(output) {
       const items = Array.isArray(output?.items) ? output.items : [];
       root.replaceChildren();
@@ -55,6 +73,7 @@ const KDRIVE_RESULTS_UI = `
         empty.className = "empty";
         empty.textContent = "No kDrive results.";
         root.append(empty);
+        notifyHeight();
         return;
       }
       for (const item of items.slice(0, 10)) {
@@ -88,14 +107,20 @@ const KDRIVE_RESULTS_UI = `
         card.append(copy, open);
         root.append(card);
       }
+      notifyHeight();
     }
+    new ResizeObserver(notifyHeight).observe(root);
     if (window.openai?.toolOutput) render(window.openai.toolOutput);
     window.addEventListener("message", (event) => {
       if (event.source !== window.parent) return;
       const message = event.data;
       if (message?.method === "ui/notifications/tool-result") render(message.params?.structuredContent);
     }, { passive: true });
-    window.addEventListener("openai:set_globals", () => render(window.openai?.toolOutput), { passive: true });
+    window.addEventListener("openai:set_globals", () => {
+      render(window.openai?.toolOutput);
+      notifyHeight();
+    }, { passive: true });
+    notifyHeight();
   </script>
 </body>
 </html>`.trim();
@@ -154,17 +179,7 @@ function jsonContent(value: unknown) {
     structuredContent: value && typeof value === "object" && !Array.isArray(value)
       ? value as Record<string, unknown>
       : { value },
-    content: [
-      { type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` },
-      ...links.map((link) => ({
-        type: "resource_link" as const,
-        uri: link.url,
-        name: link.name,
-        title: `Open ${link.name} in kDrive`,
-        ...(link.path ? { description: link.path } : {}),
-        ...(link.mimeType ? { mimeType: link.mimeType } : {}),
-      })),
-    ],
+    content: [{ type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` }],
   };
 }
 
