@@ -20,6 +20,11 @@ import {
   type OperationNonceStore,
   type OperationTokenPayload,
 } from "./operation-token.js";
+import {
+  logOperationalError,
+  logOperationalInfo,
+  operationalErrorFields,
+} from "./operational-logging.js";
 import { validateName } from "./safety.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
@@ -329,22 +334,13 @@ function logMutationFailure(
   traceId: string,
   stage: string,
   error: unknown,
-  context: Record<string, unknown>,
 ): void {
-  console.error({
+  logOperationalError({
     event: "kdrive.mutation.failed",
     action,
     traceId,
     stage,
-    ...context,
-    errorName: error instanceof Error ? error.name : typeof error,
-    errorMessage: error instanceof Error ? error.message : String(error),
-    ...(error && typeof error === "object" && "status" in error
-      ? { httpStatus: (error as { status?: unknown }).status }
-      : {}),
-    ...(error && typeof error === "object" && "code" in error
-      ? { errorCode: (error as { code?: unknown }).code }
-      : {}),
+    ...operationalErrorFields(error),
   });
 }
 
@@ -593,7 +589,7 @@ export function registerKDriveTools(
     async (input) => tool(async () => {
       const traceId = randomUUID();
       let stage = "validate_input";
-      console.info({
+      logOperationalInfo({
         event: "kdrive.create.begin",
         traceId,
         inputMode: input.path ? "path" : "parent_and_name",
@@ -613,52 +609,39 @@ export function registerKDriveTools(
 
         stage = "resolve_parent";
         const parent = await resolveDestination(client, config.driveId, parentPath);
-        console.info({
+        logOperationalInfo({
           event: "kdrive.create.parent_resolved",
           traceId,
-          parentPath: displayPath(parent),
-          parentId: parent.id,
-          parentType: parent.type,
+          parentType: parent.type === "dir" ? "dir" : "other",
         });
 
         stage = "infomaniak_request";
-        console.info({
+        logOperationalInfo({
           event: "kdrive.create.api_request",
           traceId,
           method: "POST",
           endpointTemplate: "/3/drive/{driveId}/files/{parentId}/directory",
-          folderName: name,
           hasColor: Boolean(input.color),
         });
         const created = await client.createDirectory(config.driveId, parent.id, name, input.color, { traceId });
 
         stage = "build_mcp_result";
         const result = await cleanItem(created, config);
-        console.info({
+        logOperationalInfo({
           event: "kdrive.create.mcp_result",
           traceId,
           isError: false,
-          itemType: result.type,
-          resultKeys: Object.keys(result).sort(),
+          itemType: result.type === "dir" ? "dir" : "other",
         });
         return result;
       } catch (error) {
-        const details = error instanceof Error
-          ? { errorName: error.name, errorMessage: error.message, errorStack: error.stack }
-          : { errorName: typeof error, errorMessage: String(error) };
-        console.error({
+        logOperationalError({
           event: "kdrive.create.exception",
           traceId,
           stage,
-          ...details,
-          ...(error && typeof error === "object" && "status" in error
-            ? { httpStatus: (error as { status?: unknown }).status }
-            : {}),
-          ...(error && typeof error === "object" && "code" in error
-            ? { errorCode: (error as { code?: unknown }).code }
-            : {}),
+          ...operationalErrorFields(error),
         });
-        console.info({ event: "kdrive.create.mcp_result", traceId, isError: true, stage });
+        logOperationalInfo({ event: "kdrive.create.mcp_result", traceId, isError: true, stage });
         throw error;
       }
     }),
@@ -804,12 +787,7 @@ export function registerKDriveTools(
     async ({ path, destinationPath, operationToken }) => tool(async () => {
       const traceId = randomUUID();
       let stage = "verify_prepared_operation";
-      const context = {
-        path: normalizeKDrivePath(path),
-        destinationPath: normalizeKDrivePath(destinationPath),
-        operationTokenLength: operationToken.length,
-      };
-      console.info({ event: "kdrive.mutation.begin", action: "move", traceId, ...context });
+      logOperationalInfo({ event: "kdrive.mutation.begin", action: "move", traceId });
       try {
         const { file, payload } = await verifyPreparedOperation(client, config, "move", path, operationToken);
         stage = "resolve_destination";
@@ -824,10 +802,10 @@ export function registerKDriveTools(
         await client.move(config.driveId, file.id, destination.id, { traceId });
         stage = "read_mutation_result";
         const result = await resultAfterMutation(client, config, file.id);
-        console.info({ event: "kdrive.mutation.succeeded", action: "move", traceId });
+        logOperationalInfo({ event: "kdrive.mutation.succeeded", action: "move", traceId });
         return result;
       } catch (error) {
-        logMutationFailure("move", traceId, stage, error, context);
+        logMutationFailure("move", traceId, stage, error);
         throw error;
       }
     }),
@@ -872,11 +850,7 @@ export function registerKDriveTools(
     async ({ path, operationToken }) => tool(async () => {
       const traceId = randomUUID();
       let stage = "verify_prepared_operation";
-      const context = {
-        path: normalizeKDrivePath(path),
-        operationTokenLength: operationToken.length,
-      };
-      console.info({ event: "kdrive.mutation.begin", action: "trash", traceId, ...context });
+      logOperationalInfo({ event: "kdrive.mutation.begin", action: "trash", traceId });
       try {
         const { file, payload } = await verifyPreparedOperation(client, config, "trash", path, operationToken);
         const trashedPath = displayPath(file);
@@ -898,7 +872,7 @@ export function registerKDriveTools(
         await consumePreparedOperation(config, payload);
         stage = "infomaniak_request";
         await client.trash(config.driveId, file.id, { traceId });
-        console.info({ event: "kdrive.mutation.succeeded", action: "trash", traceId });
+        logOperationalInfo({ event: "kdrive.mutation.succeeded", action: "trash", traceId });
         return {
           trashedPath,
           recoverable: true,
@@ -906,7 +880,7 @@ export function registerKDriveTools(
           undoAvailableUntil: new Date(undoPayload.expiresAt).toISOString(),
         };
       } catch (error) {
-        logMutationFailure("trash", traceId, stage, error, context);
+        logMutationFailure("trash", traceId, stage, error);
         throw error;
       }
     }),
@@ -923,7 +897,6 @@ export function registerKDriveTools(
     async ({ undoToken }) => tool(async () => {
       const traceId = randomUUID();
       let stage = "verify_undo_token";
-      const context = { undoTokenLength: undoToken.length };
       try {
         const payload = await verifyKDrivePayload(config.operationSecret, undoToken);
         assertRestorePayload(payload, config.driveId);
@@ -931,10 +904,10 @@ export function registerKDriveTools(
         await client.restore(config.driveId, payload.fileId, payload.destinationDirectoryId, { traceId });
         stage = "read_mutation_result";
         const result = await resultAfterMutation(client, config, payload.fileId);
-        console.info({ event: "kdrive.mutation.succeeded", action: "restore", traceId });
+        logOperationalInfo({ event: "kdrive.mutation.succeeded", action: "restore", traceId });
         return result;
       } catch (error) {
-        logMutationFailure("restore", traceId, stage, error, context);
+        logMutationFailure("restore", traceId, stage, error);
         throw error;
       }
     }),

@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "./config.js";
 import { KDriveApiError } from "./errors.js";
+import {
+  logOperationalInfo,
+  operationalErrorCode,
+  operationalResult,
+} from "./operational-logging.js";
 import type { TokenProvider } from "./token-store.js";
 
 export type QueryValue = string | number | boolean | readonly (string | number)[] | undefined;
@@ -154,7 +159,7 @@ export class KDriveClient {
       response = await makeRequest(true);
     }
     if (options.diagnostics) {
-      console.info({
+      logOperationalInfo({
         event: "kdrive.api_response",
         operation: options.diagnostics.operation,
         traceId: options.diagnostics.traceId,
@@ -176,14 +181,14 @@ export class KDriveClient {
     const response = await this.rawRequest(endpoint, options);
     const payload = (await response.json()) as ApiEnvelope<T>;
     if (options.diagnostics) {
-      console.info({
+      logOperationalInfo({
         event: "kdrive.api_envelope",
         operation: options.diagnostics.operation,
         traceId: options.diagnostics.traceId,
-        result: payload?.result,
+        result: operationalResult(payload?.result),
         hasData: payload?.data !== undefined && payload?.data !== null,
         dataType: Array.isArray(payload?.data) ? "array" : typeof payload?.data,
-        errorCode: payload?.error?.code,
+        errorCode: operationalErrorCode(payload?.error?.code),
       });
     }
     if (payload.result === "error") {

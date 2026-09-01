@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { Octokit } from "octokit";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
 import { assertOpenPayload, verifyKDrivePayload } from "../../src/operation-token.js";
+import { logOperationalError } from "../../src/operational-logging.js";
 import {
 	addApprovedClient,
 	bindStateToSession,
@@ -110,7 +111,11 @@ app.post("/authorize", async (c) => {
 
 		return redirectToGithub(c.req.raw, stateToken, c.env.GITHUB_CLIENT_ID, Object.fromEntries(headers));
 	} catch (error: any) {
-		console.error("POST /authorize error:", error);
+		logOperationalError({
+			event: "kdrive.oauth.failed",
+			stage: "authorize",
+			errorCategory: error instanceof OAuthError ? "oauth_error" : "application_error",
+		});
 		if (error instanceof OAuthError) {
 			return error.toResponse();
 		}

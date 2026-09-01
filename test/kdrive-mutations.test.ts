@@ -108,6 +108,21 @@ function operationToken(result: Awaited<ReturnType<ToolHandler>>): string {
   return token;
 }
 
+async function captureLogs(run: () => Promise<void>): Promise<unknown[][]> {
+  const entries: unknown[][] = [];
+  const originalInfo = console.info;
+  const originalError = console.error;
+  console.info = (...args: unknown[]) => { entries.push(args); };
+  console.error = (...args: unknown[]) => { entries.push(args); };
+  try {
+    await run();
+  } finally {
+    console.info = originalInfo;
+    console.error = originalError;
+  }
+  return entries;
+}
+
 test("a session-local nonce store reproduces the deployed prepare/write failure", async () => {
   const sourcePath = "/Private/Source/report.pdf";
   const destinationPath = "/Private/Destination";
@@ -125,15 +140,25 @@ test("a session-local nonce store reproduces the deployed prepare/write failure"
     path: sourcePath,
     destinationPath,
   });
-  const moved = await writeHandlers.get("kdrive_move")!({
-    path: sourcePath,
-    destinationPath,
-    operationToken: operationToken(prepared),
+  const signedToken = operationToken(prepared);
+  let moved: Awaited<ReturnType<ToolHandler>> | undefined;
+  const logs = await captureLogs(async () => {
+    moved = await writeHandlers.get("kdrive_move")!({
+      path: sourcePath,
+      destinationPath,
+      operationToken: signedToken,
+    });
   });
 
-  assert.equal(moved.isError, true);
-  assert.match(moved.content[0]?.text ?? "", /already used or expired/);
+  assert.equal(moved?.isError, true);
+  assert.match(moved?.content[0]?.text ?? "", /already used or expired/);
   assert.deepEqual(calls.move, []);
+  const serializedLogs = JSON.stringify(logs);
+  assert.doesNotMatch(serializedLogs, /Private|Source|Destination|report\.pdf/);
+  assert.doesNotMatch(serializedLogs, new RegExp(signedToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(serializedLogs, /already used or expired|errorStack|\"stack\"/);
+  assert.match(serializedLogs, /kdrive\.mutation\.failed/);
+  assert.match(serializedLogs, /application_error/);
 });
 
 for (const source of [

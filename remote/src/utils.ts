@@ -1,3 +1,5 @@
+import { logOperationalError } from "../../src/operational-logging.js";
+
 /**
  * Constructs an authorization URL for an upstream service.
  *
@@ -68,7 +70,12 @@ export async function fetchUpstreamAuthToken({
 		method: "POST",
 	});
 	if (!resp.ok) {
-		console.log(await resp.text());
+		logOperationalError({
+			event: "kdrive.oauth.failed",
+			stage: "exchange_upstream_token",
+			errorCategory: "upstream_http_error",
+			httpStatus: resp.status,
+		});
 		return [null, new Response("Failed to fetch access token", { status: 500 })];
 	}
 	const body = await resp.formData();

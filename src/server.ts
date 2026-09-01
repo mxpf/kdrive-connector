@@ -6,6 +6,7 @@ import { KDriveClient } from "./kdrive-client.js";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "./kdrive-instructions.js";
 import { registerKDriveTools } from "./kdrive-tools.js";
 import { generateOperationSecret, MemoryOperationNonceStore } from "./operation-token.js";
+import { logOperationalError, operationalErrorFields } from "./operational-logging.js";
 import { FileTokenStore, readAccessTokenFromKeychain, TokenProvider } from "./token-store.js";
 
 const config = loadConfig();
@@ -57,6 +58,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  logOperationalError({
+    event: "kdrive.server.failed",
+    stage: "startup",
+    ...operationalErrorFields(error),
+  });
   process.exitCode = 1;
 });
