@@ -20,7 +20,7 @@ function positiveInteger(value: string, name: string): number {
 
 export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 	server = new McpServer(
-		{ name: "kdrive-connector", version: "0.3.0" },
+		{ name: "kdrive-connector", version: "0.3.1" },
 		{ instructions: KDRIVE_SERVER_INSTRUCTIONS },
 	);
 

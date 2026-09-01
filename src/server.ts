@@ -23,7 +23,7 @@ const tokenProvider = new TokenProvider({
 const client = new KDriveClient(config, tokenProvider);
 const driveId = requireDriveId(config);
 const server = new McpServer(
-  { name: "kdrive-connector", version: "0.3.0" },
+  { name: "kdrive-connector", version: "0.3.1" },
   { instructions: KDRIVE_SERVER_INSTRUCTIONS },
 );
 
