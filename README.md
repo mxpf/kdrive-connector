@@ -4,13 +4,15 @@
   <img src="assets/kdrive-connector-logo.png" width="240" alt="kDrive Connector logo">
 </p>
 
-A path-first Model Context Protocol connector that gives ChatGPT Work, Codex,
-and other MCP clients natural, controlled read/write access to Infomaniak kDrive.
+A path-first [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) connector
+that gives ChatGPT Work, [Codex](https://openai.com/codex/), and other MCP clients
+natural, controlled read/write access to [Infomaniak kDrive](https://www.infomaniak.com/en/ksuite/kdrive).
 
-The connector uses Infomaniak's documented API-token or OAuth 2 authentication
-and the kDrive REST API. It does not send file contents to a second AI service.
-The host model decides which tool to call; this server performs exact API
-operations.
+The connector uses Infomaniak's documented
+[API-token or OAuth 2 authentication](https://developer.infomaniak.com/getting-started)
+and [REST API](https://developer.infomaniak.com/docs/api). It does not send file
+contents to a second AI service. The host model decides which tool to call; this
+server performs exact API operations.
 
 ## Why this exists
 
@@ -55,9 +57,9 @@ definitions, workflow instructions, and safety rules:
 - The root package is a local stdio MCP server. It reads its Infomaniak token
   from macOS Keychain or a user-only token file.
 - [`remote/`](remote/) is an OAuth 2.1-protected Streamable HTTP server on
-  Cloudflare Workers. GitHub verifies the connecting user, an allowlist limits
-  access to the owner, and the Infomaniak token stays in Cloudflare's encrypted
-  secret store.
+  [Cloudflare Workers](https://developers.cloudflare.com/workers/). GitHub
+  verifies the connecting user, an allowlist limits access to the owner, and the
+  Infomaniak token stays in Cloudflare's encrypted secret store.
 
 ```text
 ChatGPT Work ── MCP OAuth 2.1 ──> Cloudflare Worker ── server-side token ──> kDrive API
