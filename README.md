@@ -1,7 +1,7 @@
 # kDrive Connector
 
 <p align="center">
-  <img src="assets/kdrive-connector-logo.png" width="240" alt="kDrive Connector logo">
+  <img src="assets/kdrive-connector-logo.png?v=2" width="240" alt="kDrive Connector logo">
 </p>
 
 A path-first [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) connector
