@@ -205,8 +205,33 @@ function errorContent(error: unknown) {
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }
 
-function tool<T>(handler: () => Promise<T>, options: { materializeLinks?: boolean } = {}) {
-  return handler().then((value) => jsonContent(value, options)).catch(errorContent);
+function tool<T>(
+  operation: string,
+  handler: () => Promise<T>,
+  options: { materializeLinks?: boolean } = {},
+) {
+  const traceId = randomUUID();
+  const startedAt = Date.now();
+  return handler().then((value) => {
+    logOperationalInfo({
+      event: "kdrive.tool.completed",
+      operation,
+      traceId,
+      durationMs: Date.now() - startedAt,
+      ok: true,
+    });
+    return jsonContent(value, options);
+  }).catch((error: unknown) => {
+    logOperationalError({
+      event: "kdrive.tool.completed",
+      operation,
+      traceId,
+      durationMs: Date.now() - startedAt,
+      ok: false,
+      ...operationalErrorFields(error),
+    });
+    return errorContent(error);
+  });
 }
 
 function displayPath(file: KDriveFile): string {
@@ -287,8 +312,10 @@ async function previewFile(
     return { preview: metadataPreview, previewTruncated: false };
   }
   try {
-    const result = await client.downloadText(config.driveId, file.id);
-    if (result.bytes.byteLength > config.maxReadBytes) return {};
+    const result = await client.downloadText(config.driveId, file.id, {
+      file,
+      maxBytes: config.maxReadBytes,
+    });
     const text = new TextDecoder().decode(result.bytes).replace(/\0/g, "").trim();
     if (!text) return { preview: metadataPreview, previewTruncated: false };
     return {
@@ -434,7 +461,7 @@ export function registerKDriveTools(
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async () => tool(config.connectionStatus),
+    async () => tool("connection_status", config.connectionStatus),
   );
 
   server.registerTool(
@@ -445,7 +472,7 @@ export function registerKDriveTools(
       inputSchema: { path: kdrivePath.optional() },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ path }) => tool(async () => cleanItem(
+    async ({ path }) => tool("get_file", async () => cleanItem(
       await resolveItem(client, config.driveId, path, { defaultToRoot: true }),
       config,
     )),
@@ -470,7 +497,7 @@ export function registerKDriveTools(
       _meta: resultsUiMeta,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ directoryPath, cursor, limit }) => tool(async () => {
+    async ({ directoryPath, cursor, limit }) => tool("list_directory", async () => {
       const directory = await resolveDestination(client, config.driveId, directoryPath);
       const page = await client.listDirectory(config.driveId, directory.id, { cursor, limit });
       return {
@@ -518,7 +545,7 @@ export function registerKDriveTools(
       previewLimit,
       cursor,
       limit,
-    }) => tool(async () => {
+    }) => tool("search", async () => {
       const directory = directoryPath
         ? await resolveDestination(client, config.driveId, directoryPath)
         : undefined;
@@ -553,15 +580,12 @@ export function registerKDriveTools(
       inputSchema: { path: kdrivePath, mode: z.enum(["text", "base64"]).default("text") },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ path, mode }) => tool(async () => {
+    async ({ path, mode }) => tool("read_file", async () => {
       const file = await resolveItem(client, config.driveId, path);
       if (file.type === "dir") throw new Error(`${displayPath(file)} is a folder, not a readable file.`);
       const result = mode === "text"
-        ? await client.downloadText(config.driveId, file.id)
-        : await client.download(config.driveId, file.id);
-      if (result.bytes.byteLength > config.maxReadBytes) {
-        throw new Error(`File is ${result.bytes.byteLength} bytes; the read limit is ${config.maxReadBytes} bytes.`);
-      }
+        ? await client.downloadText(config.driveId, file.id, { file, maxBytes: config.maxReadBytes })
+        : await client.download(config.driveId, file.id, { maxBytes: config.maxReadBytes });
       return {
         file: await cleanItem(file, config),
         contentType: result.contentType,
@@ -586,7 +610,7 @@ export function registerKDriveTools(
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async (input) => tool(async () => {
+    async (input) => tool("create_directory", async () => {
       const traceId = randomUUID();
       let stage = "validate_input";
       logOperationalInfo({
@@ -662,7 +686,7 @@ export function registerKDriveTools(
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async (input) => tool(async () => {
+    async (input) => tool("upload_file", async () => {
       if (input.path && (input.directoryPath || input.fileName)) {
         throw new Error("Provide a full path, or a destination folder and filename, not both.");
       }
@@ -695,7 +719,7 @@ export function registerKDriveTools(
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ action, path, name, destinationPath, content, encoding }) => tool(async () => {
+    async ({ action, path, name, destinationPath, content, encoding }) => tool("prepare_change", async () => {
       const file = await client.resolvePath(config.driveId, path);
       assertMutableItem(file);
       const sourcePath = displayPath(file);
@@ -766,7 +790,7 @@ export function registerKDriveTools(
       inputSchema: { path: kdrivePath, name: z.string().min(1).max(255), operationToken },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ path, name, operationToken }) => tool(async () => {
+    async ({ path, name, operationToken }) => tool("rename", async () => {
       const safeName = validateName(name);
       const { file, payload } = await verifyPreparedOperation(client, config, "rename", path, operationToken);
       if (payload.name !== safeName) throw new Error("The new name does not match the prepared kDrive action.");
@@ -784,7 +808,7 @@ export function registerKDriveTools(
       inputSchema: { path: kdrivePath, destinationPath: kdrivePath, operationToken },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ path, destinationPath, operationToken }) => tool(async () => {
+    async ({ path, destinationPath, operationToken }) => tool("move", async () => {
       const traceId = randomUUID();
       let stage = "verify_prepared_operation";
       logOperationalInfo({ event: "kdrive.mutation.begin", action: "move", traceId });
@@ -824,7 +848,7 @@ export function registerKDriveTools(
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     },
-    async ({ path, content, encoding, operationToken }) => tool(async () => {
+    async ({ path, content, encoding, operationToken }) => tool("overwrite_file", async () => {
       const { file, payload } = await verifyPreparedOperation(client, config, "overwrite", path, operationToken);
       if (file.type === "dir") throw new Error(`${displayPath(file)} is a folder and cannot be overwritten.`);
       if (!file.etag || !payload.sourceEtag) throw new Error("The current file version is unavailable.");
@@ -847,7 +871,7 @@ export function registerKDriveTools(
       inputSchema: { path: kdrivePath, operationToken },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     },
-    async ({ path, operationToken }) => tool(async () => {
+    async ({ path, operationToken }) => tool("trash", async () => {
       const traceId = randomUUID();
       let stage = "verify_prepared_operation";
       logOperationalInfo({ event: "kdrive.mutation.begin", action: "trash", traceId });
@@ -894,7 +918,7 @@ export function registerKDriveTools(
       inputSchema: { undoToken: operationToken },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ undoToken }) => tool(async () => {
+    async ({ undoToken }) => tool("restore_from_trash", async () => {
       const traceId = randomUUID();
       let stage = "verify_undo_token";
       try {

@@ -57,8 +57,20 @@ interface RequestOptions {
   json?: unknown;
   body?: Uint8Array;
   diagnostics?: {
-    operation: "create_directory" | "move" | "trash" | "restore";
-    traceId: string;
+    operation:
+      | "get_drive"
+      | "get_file"
+      | "list_directory"
+      | "search"
+      | "download"
+      | "preview"
+      | "create_directory"
+      | "upload"
+      | "rename"
+      | "move"
+      | "trash"
+      | "restore";
+    traceId?: string;
   };
 }
 
@@ -105,6 +117,39 @@ function isTextContentType(contentType: string | undefined): boolean {
     || mimeType.endsWith("+xml");
 }
 
+class ResponseBodyLimitError extends Error {}
+
+async function readResponseBytes(response: Response, maxBytes?: number): Promise<Uint8Array> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (maxBytes !== undefined && Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new ResponseBodyLimitError(`The kDrive response exceeds the ${maxBytes}-byte read limit.`);
+  }
+
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (maxBytes !== undefined && totalBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new ResponseBodyLimitError(`The kDrive response exceeds the ${maxBytes}-byte read limit.`);
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 export class KDriveClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -134,6 +179,7 @@ export class KDriveClient {
 
   private async rawRequest(endpoint: string, options: RequestOptions = {}): Promise<Response> {
     const startedAt = Date.now();
+    const traceId = options.diagnostics?.traceId ?? randomUUID();
     let refreshedAccessToken = false;
     const makeRequest = async (forceRefresh = false): Promise<Response> => {
       const token = await this.tokenProvider.getAccessToken(forceRefresh);
@@ -162,7 +208,7 @@ export class KDriveClient {
       logOperationalInfo({
         event: "kdrive.api_response",
         operation: options.diagnostics.operation,
-        traceId: options.diagnostics.traceId,
+        traceId,
         durationMs: Date.now() - startedAt,
         httpStatus: response.status,
         ok: response.ok,
@@ -178,6 +224,7 @@ export class KDriveClient {
   }
 
   private async jsonRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
+    if (options.diagnostics && !options.diagnostics.traceId) options.diagnostics.traceId = randomUUID();
     const response = await this.rawRequest(endpoint, options);
     const payload = (await response.json()) as ApiEnvelope<T>;
     if (options.diagnostics) {
@@ -205,6 +252,7 @@ export class KDriveClient {
   async getDrive(driveId: number): Promise<Record<string, unknown>> {
     const response = await this.jsonRequest<Record<string, unknown>>(`/2/drive/${driveId}`, {
       query: { with: "capabilities,rights,quota" },
+      diagnostics: { operation: "get_drive" },
     });
     return response.data ?? {};
   }
@@ -212,6 +260,7 @@ export class KDriveClient {
   async getFile(driveId: number, fileId: number): Promise<KDriveFile> {
     const response = await this.jsonRequest<KDriveFile>(`/3/drive/${driveId}/files/${fileId}`, {
       query: { with: "path,etag,capabilities,parents" },
+      diagnostics: { operation: "get_file" },
     });
     if (!response.data) throw new KDriveApiError("Infomaniak returned no file metadata.");
     return response.data;
@@ -228,6 +277,7 @@ export class KDriveClient {
         limit: Math.min(Math.max(options.limit ?? 100, 5), 1000),
         with: "path,etag,capabilities",
       },
+      diagnostics: { operation: "list_directory" },
     });
     return {
       data: response.data ?? [],
@@ -291,6 +341,7 @@ export class KDriveClient {
         limit: Math.min(Math.max(options.limit ?? 50, 5), 1000),
         with: "path,etag,capabilities",
       },
+      diagnostics: { operation: "search" },
     });
     return {
       data: response.data ?? [],
@@ -303,39 +354,50 @@ export class KDriveClient {
   async download(
     driveId: number,
     fileId: number,
-    options: { convertAs?: "text" | "pdf" } = {},
+    options: { convertAs?: "text" | "pdf"; maxBytes?: number } = {},
   ): Promise<DownloadResult> {
     const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/download`, {
       query: { as: options.convertAs },
       headers: { accept: "*/*" },
+      diagnostics: { operation: "download" },
     });
     return {
-      bytes: new Uint8Array(await response.arrayBuffer()),
+      bytes: await readResponseBytes(response, options.maxBytes),
       contentType: response.headers.get("content-type") ?? "application/octet-stream",
     };
   }
 
-  async downloadText(driveId: number, fileId: number): Promise<TextDownloadResult> {
-    const file = await this.getFile(driveId, fileId);
+  async downloadText(
+    driveId: number,
+    fileId: number,
+    options: { file?: KDriveFile; maxBytes?: number } = {},
+  ): Promise<TextDownloadResult> {
+    const file = options.file ?? await this.getFile(driveId, fileId);
     if (isTextContentType(file.mime_type)) {
-      return { ...await this.download(driveId, fileId), textSource: "raw" };
+      return { ...await this.download(driveId, fileId, { maxBytes: options.maxBytes }), textSource: "raw" };
     }
 
     try {
       const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/preview`, {
         query: { as: "text" },
         headers: { accept: "*/*" },
+        diagnostics: { operation: "preview" },
       });
       return {
-        bytes: new Uint8Array(await response.arrayBuffer()),
+        bytes: await readResponseBytes(response, options.maxBytes),
         contentType: response.headers.get("content-type") ?? "text/plain",
         textSource: "converted",
       };
     } catch (previewError) {
+      if (previewError instanceof ResponseBodyLimitError) throw previewError;
       try {
-        return { ...await this.download(driveId, fileId, { convertAs: "text" }), textSource: "converted" };
-      } catch {
-        const raw = await this.download(driveId, fileId);
+        return {
+          ...await this.download(driveId, fileId, { convertAs: "text", maxBytes: options.maxBytes }),
+          textSource: "converted",
+        };
+      } catch (conversionError) {
+        if (conversionError instanceof ResponseBodyLimitError) throw conversionError;
+        const raw = await this.download(driveId, fileId, { maxBytes: options.maxBytes });
         if (!isTextContentType(raw.contentType)) throw previewError;
         return { ...raw, textSource: "raw" };
       }
@@ -353,7 +415,7 @@ export class KDriveClient {
       method: "POST",
       json: { name, ...(color ? { color } : {}) },
       query: { with: "path,capabilities" },
-      ...(diagnostics ? { diagnostics: { operation: "create_directory", traceId: diagnostics.traceId } } : {}),
+      diagnostics: { operation: "create_directory", traceId: diagnostics?.traceId },
     });
     if (!response.data) throw new KDriveApiError("Infomaniak did not return the new directory.");
     return response.data;
@@ -383,6 +445,7 @@ export class KDriveClient {
         conflict: input.conflict,
         with: "path,etag,capabilities",
       },
+      diagnostics: { operation: "upload" },
     });
     if (!response.data) throw new KDriveApiError("Infomaniak did not return the uploaded file.");
     return response.data;
@@ -392,6 +455,7 @@ export class KDriveClient {
     const response = await this.jsonRequest<KDriveFile | boolean>(`/2/drive/${driveId}/files/${fileId}/rename`, {
       method: "POST",
       json: { name },
+      diagnostics: { operation: "rename" },
     });
     return response.data ?? true;
   }
@@ -407,7 +471,7 @@ export class KDriveClient {
       {
         method: "POST",
         json: { conflict: "error" },
-        ...(diagnostics ? { diagnostics: { operation: "move", traceId: diagnostics.traceId } } : {}),
+        diagnostics: { operation: "move", traceId: diagnostics?.traceId },
       },
     );
     return response.data ?? true;
@@ -416,7 +480,7 @@ export class KDriveClient {
   async trash(driveId: number, fileId: number, diagnostics?: { traceId: string }): Promise<boolean> {
     const response = await this.jsonRequest<boolean>(`/2/drive/${driveId}/files/${fileId}`, {
       method: "DELETE",
-      ...(diagnostics ? { diagnostics: { operation: "trash", traceId: diagnostics.traceId } } : {}),
+      diagnostics: { operation: "trash", traceId: diagnostics?.traceId },
     });
     return response.data ?? true;
   }
@@ -430,7 +494,7 @@ export class KDriveClient {
     const response = await this.jsonRequest<KDriveFile | boolean>(`/2/drive/${driveId}/trash/${fileId}/restore`, {
       method: "POST",
       json: { destination_directory_id: destinationDirectoryId },
-      ...(diagnostics ? { diagnostics: { operation: "restore", traceId: diagnostics.traceId } } : {}),
+      diagnostics: { operation: "restore", traceId: diagnostics?.traceId },
     });
     return response.data ?? true;
   }

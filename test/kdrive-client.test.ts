@@ -106,6 +106,49 @@ test("document text reads use kDrive's documented preview conversion endpoint", 
   assert.equal(previewUrl.searchParams.get("as"), "text");
 });
 
+test("bounded downloads stop a chunked response before buffering beyond the read limit", async () => {
+  let fetchCalls = 0;
+  const fakeFetch: typeof fetch = async () => {
+    fetchCalls += 1;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("abc"));
+        controller.enqueue(new TextEncoder().encode("def"));
+        controller.close();
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "text/plain" } });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+
+  await assert.rejects(
+    client.downloadText(123, 46, {
+      file: { id: 46, name: "large.txt", type: "file", mime_type: "text/plain" },
+      maxBytes: 4,
+    }),
+    /exceeds the 4-byte read limit/,
+  );
+  assert.equal(fetchCalls, 1);
+});
+
+test("search preview metadata avoids a redundant file metadata request", async () => {
+  const seenUrls: string[] = [];
+  const fakeFetch: typeof fetch = async (input) => {
+    seenUrls.push(String(input));
+    return new Response("preview", { status: 200, headers: { "content-type": "text/plain" } });
+  };
+  const client = new KDriveClient(config, { getAccessToken: async () => "test-token" }, fakeFetch);
+
+  const result = await client.downloadText(123, 47, {
+    file: { id: 47, name: "preview.txt", type: "file", mime_type: "text/plain" },
+    maxBytes: 100,
+  });
+
+  assert.equal(new TextDecoder().decode(result.bytes), "preview");
+  assert.equal(seenUrls.length, 1);
+  assert.match(seenUrls[0]!, /\/files\/47\/download/);
+});
+
 test("new uploads default to a conflict-safe request shape", async () => {
   let seenUrl = "";
   let seenBody = "";

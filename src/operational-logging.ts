@@ -40,9 +40,9 @@ export function operationalErrorCode(value: unknown): string | undefined {
 }
 
 export function logOperationalInfo(entry: OperationalLogEntry): void {
-  console.info(entry);
+  console.info(JSON.stringify(entry));
 }
 
 export function logOperationalError(entry: OperationalLogEntry): void {
-  console.error(entry);
+  console.error(JSON.stringify(entry));
 }

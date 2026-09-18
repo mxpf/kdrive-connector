@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig } from "../src/config.js";
 import { buildAuthorizationUrl, exchangeAuthorizationCode } from "../src/oauth.js";
+import { internalServerErrorResponse, redirectToGithub } from "../remote/src/utils.js";
 
 test("authorization URL includes state, scope, and registered redirect", () => {
   const config = loadConfig({
@@ -41,4 +42,31 @@ test("authorization code exchange uses a form body and stores refresh metadata",
   assert.equal(token.refresh_token, "refresh");
   assert.equal(token.client_id, "client-123");
   assert.ok(token.expires_at && token.expires_at > Date.now());
+});
+
+test("GitHub authorization redirects preserve both OAuth cookies", () => {
+  const headers = new Headers();
+  headers.append("Set-Cookie", "approved=one; Path=/; Secure; HttpOnly");
+  headers.append("Set-Cookie", "session=two; Path=/; Secure; HttpOnly");
+
+  const response = redirectToGithub(
+    new Request("https://connector.example.test/authorize"),
+    "state-token",
+    "github-client",
+    headers,
+  );
+  const responseHeaders = response.headers as Headers & { getSetCookie?: () => string[] };
+  const cookies = responseHeaders.getSetCookie?.() ?? [response.headers.get("set-cookie") ?? ""];
+
+  assert.equal(response.status, 302);
+  assert.match(response.headers.get("location") ?? "", /github\.com\/login\/oauth\/authorize/);
+  assert.match(cookies.join("\n"), /approved=one/);
+  assert.match(cookies.join("\n"), /session=two/);
+});
+
+test("unexpected OAuth failures do not expose exception messages", async () => {
+  const response = internalServerErrorResponse();
+  assert.equal(response.status, 500);
+  assert.equal(await response.text(), "Internal server error");
+  assert.doesNotMatch(await internalServerErrorResponse().text(), /secret|stack|message/i);
 });

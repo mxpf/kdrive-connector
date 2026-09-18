@@ -1,9 +1,14 @@
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { Octokit } from "octokit";
-import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl, type Props } from "./utils";
+import {
+	fetchUpstreamAuthToken,
+	internalServerErrorResponse,
+	redirectToGithub,
+	type Props,
+} from "./utils";
 import { assertOpenPayload, verifyKDrivePayload } from "../../src/operation-token.js";
-import { logOperationalError } from "../../src/operational-logging.js";
+import { logOperationalError, logOperationalInfo } from "../../src/operational-logging.js";
 import {
 	addApprovedClient,
 	bindStateToSession,
@@ -17,6 +22,27 @@ import {
 } from "./workers-oauth-utils";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
+
+app.use("*", async (c, next) => {
+	const startedAt = Date.now();
+	await next();
+	const pathname = new URL(c.req.url).pathname;
+	const operation = pathname === "/authorize"
+		? "oauth_authorize"
+		: pathname === "/callback"
+			? "oauth_callback"
+			: pathname.startsWith("/open/")
+				? "open_link"
+				: "default_handler";
+	logOperationalInfo({
+		event: "kdrive.http.completed",
+		operation,
+		method: c.req.method,
+		durationMs: Date.now() - startedAt,
+		httpStatus: c.res.status,
+		ok: c.res.ok,
+	});
+});
 
 app.get("/open/:token", async (c) => {
 	try {
@@ -109,8 +135,8 @@ app.post("/authorize", async (c) => {
 		headers.append("Set-Cookie", approvedClientCookie);
 		headers.append("Set-Cookie", sessionBindingCookie);
 
-		return redirectToGithub(c.req.raw, stateToken, c.env.GITHUB_CLIENT_ID, Object.fromEntries(headers));
-	} catch (error: any) {
+		return redirectToGithub(c.req.raw, stateToken, c.env.GITHUB_CLIENT_ID, headers);
+	} catch (error: unknown) {
 		logOperationalError({
 			event: "kdrive.oauth.failed",
 			stage: "authorize",
@@ -120,30 +146,9 @@ app.post("/authorize", async (c) => {
 			return error.toResponse();
 		}
 		// Unexpected non-OAuth error
-		return c.text(`Internal server error: ${error.message}`, 500);
+		return internalServerErrorResponse();
 	}
 });
-
-async function redirectToGithub(
-	request: Request,
-	stateToken: string,
-	githubClientId: string,
-	headers: Record<string, string> = {},
-) {
-	return new Response(null, {
-		headers: {
-			...headers,
-			location: getUpstreamAuthorizeUrl({
-				client_id: githubClientId,
-				redirect_uri: new URL("/callback", request.url).href,
-				scope: "read:user",
-				state: stateToken,
-				upstream_url: "https://github.com/login/oauth/authorize",
-			}),
-		},
-		status: 302,
-	});
-}
 
 /**
  * OAuth Callback Endpoint
@@ -171,12 +176,17 @@ app.get("/callback", async (c) => {
 		const result = await validateOAuthState(c.req.raw, c.env.OAUTH_KV);
 		oauthReqInfo = result.oauthReqInfo;
 		clearSessionCookie = result.clearCookie;
-	} catch (error: any) {
+	} catch (error: unknown) {
 		if (error instanceof OAuthError) {
 			return error.toResponse();
 		}
+		logOperationalError({
+			event: "kdrive.oauth.failed",
+			stage: "validate_callback_state",
+			errorCategory: "application_error",
+		});
 		// Unexpected non-OAuth error
-		return c.text("Internal server error", 500);
+		return internalServerErrorResponse();
 	}
 
 	if (!oauthReqInfo.clientId) {

@@ -33,6 +33,27 @@ export function getUpstreamAuthorizeUrl({
 	return upstream.href;
 }
 
+export function redirectToGithub(
+	request: Request,
+	stateToken: string,
+	githubClientId: string,
+	headers: HeadersInit = {},
+): Response {
+	const responseHeaders = new Headers(headers);
+	responseHeaders.set("location", getUpstreamAuthorizeUrl({
+		client_id: githubClientId,
+		redirect_uri: new URL("/callback", request.url).href,
+		scope: "read:user",
+		state: stateToken,
+		upstream_url: "https://github.com/login/oauth/authorize",
+	}));
+	return new Response(null, { headers: responseHeaders, status: 302 });
+}
+
+export function internalServerErrorResponse(): Response {
+	return new Response("Internal server error", { status: 500 });
+}
+
 /**
  * Fetches an authorization token from an upstream service.
  *
