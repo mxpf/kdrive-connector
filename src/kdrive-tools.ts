@@ -73,7 +73,8 @@ const KDRIVE_RESULTS_UI = `
       });
     }
     function render(output) {
-      const items = Array.isArray(output?.items) ? output.items : [];
+      if (!Array.isArray(output?.items)) return;
+      const items = output.items;
       root.replaceChildren();
       if (!items.length) {
         const empty = document.createElement("div");
@@ -468,7 +469,7 @@ export function registerKDriveTools(
     "kdrive_get_file",
     {
       title: "Get a kDrive file or folder",
-      description: "Use for details about a known kDrive path such as /Private/Invoices/report.pdf. Omit path only for the kDrive root. Do not use for Google Drive or local files.",
+      description: "Prefer this metadata-only action to identify or get details about a known kDrive file or folder without reading or materializing its contents. Use a natural path such as /Private/Invoices/report.pdf. Omit path only for the kDrive root. Do not use for Google Drive or local files.",
       inputSchema: { path: kdrivePath.optional() },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
@@ -482,9 +483,9 @@ export function registerKDriveTools(
     "kdrive_list_directory",
     {
       title: "List a kDrive folder",
-      description: "Use to browse an Infomaniak kDrive folder by natural path. Omit directoryPath for the root and pass cursor only to continue a prior page.",
+      description: "Preferred action to list a known or conventional kDrive folder: pass its full natural path directly without first enumerating ancestors or searching. In this deployment only, my Inbox means /Private/00 Inbox and Private means /Private. Always respect an explicit user-provided path; investigate alternatives only if the conventional folder is missing. Omit directoryPath for the root and pass cursor only to continue a prior page.",
       inputSchema: {
-        directoryPath: kdrivePath.optional(),
+        directoryPath: kdrivePath.optional().describe("Full natural folder path. In this deployment, my Inbox maps to /Private/00 Inbox and Private to /Private; an explicit user-provided path takes precedence. Omit only to list the root."),
         cursor: z.string().optional(),
         limit: z.number().int().min(5).max(1000).default(100),
       },
@@ -513,7 +514,7 @@ export function registerKDriveTools(
     "kdrive_search",
     {
       title: "Search kDrive files",
-      description: "Use when the user asks to find something in kDrive or refers to files under a known kDrive path. Searches filenames and supported document content, returns paths, short previews, and Open in kDrive links. Do not use for another storage service unless the user identifies kDrive.",
+      description: "Use when the kDrive location is unknown or the user explicitly requests a filename/content search, optionally scoped to a known folder. For simply listing a known or conventional folder, use kdrive_list_directory directly instead. Returns paths, short connector-side previews, and Open in kDrive links; reuse sufficient previews without materializing files. Do not use for another storage service unless the user identifies kDrive.",
       inputSchema: {
         query: z.string().min(3).max(500),
         directoryPath: kdrivePath.optional(),
@@ -576,7 +577,7 @@ export function registerKDriveTools(
     "kdrive_read_file",
     {
       title: "Read a kDrive file",
-      description: "Use to read or summarize one known kDrive file by path. Prefer text. Request base64 only once when the actual file attachment is needed for rendered-page or binary inspection; that mode may require native download approval.",
+      description: "Use to read or summarize one known kDrive file by path. Use kdrive_get_file metadata for identification, and reuse connector-side previews when sufficient. Prefer text reads. Request base64 only when the actual attachment is necessary for visual or binary inspection; that mode may require native download approval. Reuse an already materialized file within the task when available instead of requesting it again.",
       inputSchema: { path: kdrivePath, mode: z.enum(["text", "base64"]).default("text") },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import { KDRIVE_SERVER_INSTRUCTIONS } from "../src/kdrive-instructions.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { KDriveClient } from "../src/kdrive-client.js";
 import { registerKDriveTools } from "../src/kdrive-tools.js";
@@ -127,6 +129,11 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     "ui://kdrive/results-v3.html",
   );
   assert.ok(registrations.get("kdrive_search")!.outputSchema);
+  assert.match(String(registrations.get("kdrive_list_directory")!.description), /without first enumerating ancestors or searching/);
+  assert.match(String(registrations.get("kdrive_search")!.description), /location is unknown or the user explicitly requests a filename\/content search/);
+  assert.match(String(registrations.get("kdrive_read_file")!.description), /Reuse an already materialized file/);
+  const directoryPath = (registrations.get("kdrive_list_directory")!.inputSchema as Record<string, { description?: string }>).directoryPath;
+  assert.match(directoryPath.description ?? "", /explicit user-provided path takes precedence/);
   for (const [uri, readResultsResource] of resourceRegistrations) {
     const resource = await readResultsResource();
     const contents = resource.contents as Array<{ uri?: string; text?: string }>;
@@ -134,6 +141,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     assert.match(contents[0]?.text ?? "", /notifyIntrinsicHeight/);
     assert.match(contents[0]?.text ?? "", /ui\/notifications\/size-changed/);
     assert.match(contents[0]?.text ?? "", /ResizeObserver/);
+    verifyResultsRendering(contents[0]?.text ?? "");
   }
 
   const status = await handlers.get("kdrive_connection_status")?.() as {
@@ -150,3 +158,71 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   }) as { content: Array<{ type: string }> };
   assert.equal(file.content.filter((item) => item.type === "resource_link").length, 1);
 });
+
+test("shared instructions prioritize deployment conventions, explicit paths, and minimal inspection", () => {
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /In this deployment only, “my Inbox” means \/Private\/00 Inbox and “Private” means \/Private/);
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /not universal kDrive locations/);
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /Always respect an explicit user-provided path/);
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /If the conventional folder is missing, investigate alternatives/);
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /Use metadata to identify a file/);
+  assert.match(KDRIVE_SERVER_INSTRUCTIONS, /Reuse already materialized files/);
+});
+
+// Execute the actual registered widget script, including both host event bridges.
+function verifyResultsRendering(html: string) {
+  class Element {
+    children: Element[] = [];
+    textContent = "";
+    className = "";
+    listeners = new Map<string, () => void>();
+    append(...children: Element[]) { this.children.push(...children); }
+    replaceChildren() { this.children = []; }
+    addEventListener(name: string, callback: () => void) { this.listeners.set(name, callback); }
+  }
+  const root = new Element();
+  const loading = new Element();
+  loading.textContent = "Loading kDrive results…";
+  root.append(loading);
+  const events = new Map<string, (event?: unknown) => void>();
+  const opened: unknown[] = [];
+  const window = {
+    parent: {},
+    openai: { toolOutput: undefined as unknown, openExternal: (value: unknown) => opened.push(value) },
+    addEventListener: (name: string, callback: (event?: unknown) => void) => events.set(name, callback),
+  };
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script);
+  runInNewContext(script, {
+    window,
+    document: { getElementById: () => root, createElement: () => new Element() },
+    ResizeObserver: class { observe() {} },
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame: () => {},
+  });
+  const message = (output: unknown) => events.get("message")!({
+    source: window.parent,
+    data: { method: "ui/notifications/tool-result", params: { structuredContent: output } },
+  });
+  for (const invalid of [undefined, null, {}, { items: null }, { items: {} }]) {
+    message(invalid);
+    window.openai.toolOutput = invalid;
+    events.get("openai:set_globals")!();
+    assert.equal(root.children[0], loading);
+  }
+  message({ items: [] });
+  assert.equal(root.children[0].textContent, "No kDrive results.");
+  window.openai.toolOutput = { items: [{ name: "receipt.png", path: "/Private/00 Inbox/receipt.png", preview: "Receipt", openUrl: "https://example.test/open/receipt" }] };
+  events.get("openai:set_globals")!();
+  assert.equal(root.children.length, 1);
+  const card = root.children[0];
+  assert.deepEqual(card.children[0].children.map((node) => node.textContent), ["receipt.png", "/Private/00 Inbox/receipt.png", "Receipt"]);
+  assert.equal(card.children[1].textContent, "Open in kDrive");
+  card.children[1].listeners.get("click")!();
+  assert.equal((opened[0] as { href: string }).href, "https://example.test/open/receipt");
+  window.openai.toolOutput = undefined;
+  events.get("openai:set_globals")!();
+  message({});
+  assert.equal(root.children[0], card);
+  message({ items: [] });
+  assert.equal(root.children[0].textContent, "No kDrive results.");
+}
