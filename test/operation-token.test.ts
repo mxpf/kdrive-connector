@@ -108,7 +108,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     }),
   });
 
-  assert.equal(registrations.size, 13);
+  assert.equal(registrations.size, 14);
   assert.deepEqual(
     [...resourceRegistrations.keys()].sort(),
     ["ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html"],
@@ -149,7 +149,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   };
   assert.equal(status.content.length, 1);
   assert.equal(status.content[0]?.type, "text");
-  assert.match(status.content[0]?.text ?? "", /\[Open kDrive in kDrive\]\(https:\/\/example\.test\/open\/opaque\)/);
+  assert.match(status.content[0]?.text ?? "", /\[Open in kDrive\]\(https:\/\/example\.test\/open\/opaque\)/);
   assert.equal(status.content.some((item) => item.type === "resource_link"), false);
 
   const file = await handlers.get("kdrive_read_file")?.({

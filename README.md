@@ -43,11 +43,37 @@ below.
 - Browse folders and retrieve file details by natural path
 - Search filenames and supported document content with short previews and an inline result card containing private Open in kDrive buttons
 - Read files as converted text or base64
+- Compute SHA-256 digests of original file bytes by path for duplicate audits
 - Create folders and upload new files without overwriting existing names
 - Rename, move, overwrite, and trash items through one normal host approval
 - Restore recoverable items from trash
 
 The connector accepts paths such as `/Private/Projects/brief.docx`; its public tool schemas contain no file IDs, folder IDs, or ETags. Sensitive changes use short-lived, one-use signed operation tokens bound to the resolved target, requested action, current file version, and exact replacement content when applicable. The token exchange stays internal while the host presents one ordinary approval. Permanent deletion and empty-trash operations are deliberately not exposed.
+
+## Result contract and duplicate audits
+
+`structuredContent` is the canonical machine-readable result. Text content is a
+short outcome with at most one open link; it does not repeat file contents,
+complete directory JSON, or a link appendix. Directory/search items, previews,
+pagination, and open URLs remain in structured data and the existing result UI.
+Callers needing links for every item can render those URLs when requested.
+Base64 reads retain their explicit attachment resource link. Text-only clients
+must consume structured results to obtain complete data.
+
+Use `kdrive_digest_file({ path })` for each candidate file and compare both
+`digest` and `byteLength`. The result declares `algorithm: "sha256"` and
+`digestEncoding: "base64url"`. It hashes original bytes, never converted text or
+an ETag. It requires an unchanged file identity and ETag across the read, refuses
+folders or missing versions, and uses the existing bounded download limit.
+The connector still downloads bytes from kDrive internally; it does not transfer
+those bytes to the model. Results describe the versions read, not an atomic
+snapshot of multiple paths or a promise that those paths will never change.
+
+Prepare and undo tokens remain in structured results because existing write
+calls require them. They are omitted from human-readable text; hosts must keep
+these machine protocol handles out of user-facing conversation. Credentials and
+raw version bindings are not added to result fields. Removing handles from model
+context entirely would require a separate host/server protocol migration.
 
 ## Architecture
 

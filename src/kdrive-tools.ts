@@ -145,10 +145,6 @@ export interface KDriveToolConfig {
   undoTtlMs?: number;
 }
 
-function markdownLabel(value: string): string {
-  return value.replace(/([\\[\]])/g, "\\$1");
-}
-
 interface OpenLink {
   url: string;
   name: string;
@@ -178,17 +174,37 @@ function collectOpenLinks(value: unknown, links: OpenLink[] = []): OpenLink[] {
   return links;
 }
 
-function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {}) {
-  const links = [...new Map(collectOpenLinks(value).map((link) => [link.url, link])).values()];
-  const linkSection = links.length > 0
-    ? `\n\nClickable kDrive links (preserve these exact Markdown links in the user-facing response):\n${links.map((link) => `- [${markdownLabel(`Open ${link.name} in kDrive`)}](${link.url})`).join("\n")}`
-    : "";
+// Text is a bounded human-facing view, never a second serialization of the payload.
+// Opaque prepare/undo handles remain only in structuredContent for the existing protocol.
+function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {}, operation = "") {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : { value };
+  const summaries: Record<string, string> = {
+    connection_status: "kDrive connection status retrieved.",
+    get_file: "kDrive item details retrieved.",
+    read_file: `File read (${record.byteLength} bytes, ${record.encoding}). Contents are in structuredContent.`,
+    digest_file: `SHA-256 digest computed (${record.byteLength} bytes).`,
+    prepare_change: "Change prepared.",
+    create_directory: "Folder created.",
+    upload_file: "File uploaded.",
+    overwrite_file: "File contents replaced.",
+    rename: "Item renamed.",
+    move: "Item moved.",
+    trash: "Item moved to recoverable trash.",
+    restore_from_trash: "Item restored.",
+  };
+  const items = Array.isArray(record.items) ? record.items : undefined;
+  const summary = items
+    ? `${items.length} ${operation === "search" ? "matching " : ""}items returned.${record.hasMore ? " More results available." : ""} Details are in structuredContent.`
+    : summaries[operation] ?? "kDrive operation completed.";
+  // Lists keep links in structuredContent/UI only. Singular results get one open link.
+  const links = items ? [] : collectOpenLinks(value).slice(0, 1);
+  const linkSection = links.length && !options.materializeLinks
+    ? `\n[Open in kDrive](${links[0]!.url})` : "";
   return {
-    structuredContent: value && typeof value === "object" && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : { value },
+    structuredContent: record,
     content: [
-      { type: "text" as const, text: `${JSON.stringify(value, null, 2)}${linkSection}` },
+      { type: "text" as const, text: `${summary}${linkSection}` },
       ...(options.materializeLinks ? links.map((link) => ({
         type: "resource_link" as const,
         uri: link.url,
@@ -221,7 +237,7 @@ function tool<T>(
       durationMs: Date.now() - startedAt,
       ok: true,
     });
-    return jsonContent(value, options);
+    return jsonContent(value, options, operation);
   }).catch((error: unknown) => {
     logOperationalError({
       event: "kdrive.tool.completed",
@@ -569,6 +585,44 @@ export function registerKDriveTools(
         items,
         cursor: page.cursor,
         hasMore: page.has_more ?? false,
+      };
+    }),
+  );
+
+  server.registerTool(
+    "kdrive_digest_file",
+    {
+      title: "Compute a kDrive file digest",
+      description: "Compute SHA-256 of one file's original bytes by natural path, without returning contents or base64. Compare digest and byteLength from two results for duplicate audits. Reads up to the configured file-read limit; requires a stable file version and fails if it changes during the read. Never hashes converted text or treats an ETag as a checksum.",
+      inputSchema: { path: kdrivePath },
+      outputSchema: {
+        path: z.string(),
+        algorithm: z.literal("sha256"),
+        digestEncoding: z.literal("base64url"),
+        digest: z.string(),
+        byteLength: z.number().int().nonnegative(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ path }) => tool("digest_file", async () => {
+      const file = await resolveItem(client, config.driveId, path);
+      if (file.type === "dir") throw new Error("A folder cannot be digested. Choose a file.");
+      if (!file.etag) throw new Error("The current file version is unavailable; no digest was produced.");
+      if (file.size !== undefined && file.size > config.maxReadBytes) {
+        throw new Error("The file exceeds the connector read limit; no digest was produced.");
+      }
+      const result = await client.download(config.driveId, file.id, { maxBytes: config.maxReadBytes });
+      const digest = await sha256Base64Url(result.bytes);
+      const current = await resolveItem(client, config.driveId, path);
+      if (current.id !== file.id || current.etag !== file.etag || displayPath(current) !== displayPath(file)) {
+        throw new Error("The file changed during the read; retry to compute its digest.");
+      }
+      return {
+        path: displayPath(file),
+        algorithm: "sha256" as const,
+        digestEncoding: "base64url" as const,
+        digest,
+        byteLength: result.bytes.byteLength,
       };
     }),
   );
