@@ -161,10 +161,10 @@ npm start
 ```
 
 The repository includes `.mcp.json` for clients that launch the local stdio
-server directly. Build before registering that local server. The packaged
-workflow plugin intentionally uses the authenticated remote connection through
-`.app.json`, so installing it does not copy a local `.env` or token into the
-plugin.
+server directly. Build before registering that local server. The optional
+legacy workflow package uses a remote app mapping through `.app.json`; it does
+not copy a local `.env` or token into the package. See the migration note below
+before using that mapping.
 
 ## Remote runtime for ChatGPT Work
 
@@ -173,33 +173,43 @@ discovery, dynamic client registration, PKCE, bearer-token validation, and
 GitHub identity verification. See [`remote/README.md`](remote/README.md) for the
 deployment and ChatGPT connection guide.
 
-## Complete ChatGPT and Codex plugin
+## Current ChatGPT connection
 
-The repository is also packaged as a complete plugin rather than only an MCP
-server:
+Use **kDrive Connector**, the authenticated remote app with the black **k**
+icon. This is the single connection to select with `@` in ChatGPT. It connects
+directly to the existing Cloudflare Worker; a separate instruction plugin is
+not required. The server already supplies the core path-based workflow and
+prepare/write safety instructions.
 
-- `.codex-plugin/plugin.json` supplies the install identity, discovery copy,
-  capabilities, artwork, and starter prompts.
-- `.app.json` maps the package to the registered authenticated remote connector.
-- `skills/manage-kdrive-files/` supplies the workflow that makes ordinary
-  requests such as “find my latest invoice in kDrive” work without exposing
-  connector internals.
-- `assets/` contains the connector icon and logo used by supported install
-  surfaces.
+On September 25, 2026, the replacement connection was authenticated and verified
+with a read-only `kdrive_digest_file` call against
+`/Private/03 Projects/Keepinghaus/Keepinghaus — Manifesto.md` (3,126 bytes at the
+time of verification). The old app named **kDrive Connection** was then retired.
+This was a ChatGPT app registration and branding change, not a new server or a
+change to kDrive files, permissions, or credentials.
 
-The combined experience has been tested in a fresh Codex session against the
-deployed OAuth-protected server: the skill selected the connector
-automatically, reused the authenticated account, checked connection health,
-listed the root directory, and returned a private **Open in kDrive** link. No
-file was modified during that smoke test.
+For a new setup, register your remote `/mcp` endpoint, choose the connector icon
+when creating the app, and sign in with the allowlisted GitHub account. Refresh
+the app's tools after server updates and verify them in a new conversation.
+Use `kdrive_digest_file` for byte comparisons without returning file contents.
+The current deployment is owner-only; this repository is not a universally
+available hosted kDrive service.
 
-For local development, add the plugin directory to a personal or repository
-marketplace, install `kdrive-connector` from the Plugins directory, restart the
-desktop host, and test it in a new conversation. A self-hosted fork should
-replace the app ID in `.app.json` with the technical ID of its own registered
-MCP connection. The current deployment and its GitHub allowlist are owner-only;
-the repository contains the development source, but the deployed connector is
-not yet a universally available hosted kDrive service.
+### Optional legacy workflow package
+
+The repository retains the earlier package sources for development:
+
+- `.codex-plugin/plugin.json` contains package metadata and starter prompts.
+- `.app.json` contains the earlier remote app mapping.
+- `skills/manage-kdrive-files/` contains supplementary workflow guidance.
+- `assets/` preserves the connector icon and logo artwork.
+
+The separate local instruction package was removed from the owner's catalog to
+avoid a second kDrive choice. Do not reinstall it for the current ChatGPT setup.
+The checked-in `.app.json` still references the retired app; developers who
+choose to use this optional package must replace that ID with their own active
+remote app ID before installation. The supported local stdio server remains
+available independently of this package.
 
 ## Safety behavior
 
@@ -213,7 +223,7 @@ not yet a universally available hosted kDrive service.
 - Results contain private, expiring Open in kDrive redirect links instead of public share links. Search adds bounded text previews when conversion is supported and a concise type/size preview otherwise. ChatGPT-compatible hosts also receive a native MCP Apps result card with clickable Open in kDrive buttons; structured data, resource links, and Markdown remain available as fallbacks.
 - Reads default to 2 MiB and uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`.
 
-The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The packaged `.app.json` maps that skill to the registered remote connector. If a user asks only to preview a change, the skill prevents both prepare and write tools from running.
+The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The legacy package needs an active app mapping before use, as described above. If a user asks only to preview a change, the skill prevents both prepare and write tools from running. These core workflow safeguards are also supplied by the server, so the current remote app does not depend on the separate skill package.
 
 ## Development checks
 
