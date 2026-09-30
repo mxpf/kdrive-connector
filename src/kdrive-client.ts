@@ -375,27 +375,54 @@ export class KDriveClient {
     };
   }
 
-  /** Pin the newest immutable version while detecting concurrent changes. */
+  /** History can be empty, and its newest entry is not necessarily current.
+   * Bind new exports to the current file ETag; every byte stream is checked again.
+   */
   async resolveBinaryVersion(driveId: number, path: string, signal: AbortSignal) {
     const resolved = await this.resolvePath(driveId, path, signal);
     const before = await this.getFile(driveId, resolved.id, signal);
-    if (before.type === "dir" || !before.etag) throw new BinaryTransferError("Binary export requires a file with a version ETag.");
-    const versions = await this.jsonRequest<Array<{ id: number; size: number; mime_type?: string; created_at: number }>>(
-      `/3/drive/${driveId}/files/${before.id}/versions`, {
-        query: { per_page: 2, order_by: "created_at", order: "desc" }, signal,
-      },
-    );
-    const version = versions.data?.[0];
-    const after = await this.getFile(driveId, before.id, signal);
-    if (!version || !Number.isSafeInteger(version.id) || version.id <= 0 || version.size !== before.size
-      || before.etag !== after.etag || versions.data?.[1]?.created_at === version.created_at) {
-      throw new BinaryTransferError("Cannot unambiguously pin the current file version. Retry after the file stops changing.");
+    if (before.type === "dir" || typeof before.etag !== "string" || !before.etag.trim() || before.etag.length > 1024) {
+      throw new BinaryTransferError("Binary export requires a file with a valid version ETag.");
     }
-    return { file: before, versionId: version.id };
+    const after = await this.getFile(driveId, before.id, signal);
+    if (typeof before.size !== "number" || !Number.isSafeInteger(before.size) || before.size < 0
+      || before.etag !== after.etag || before.size !== after.size) {
+      throw new BinaryTransferError("Current file metadata changed or has no valid size. Retry after the file stops changing.");
+    }
+    return { file: before, versionId: before.etag };
   }
 
-  async downloadVersionStream(driveId: number, fileId: number, versionId: number, signal: AbortSignal): Promise<Response> {
-    const url = this.buildUrl(`/2/drive/${driveId}/files/${fileId}/versions/${versionId}/download`);
+  async downloadVersionStream(driveId: number, fileId: number, versionId: number | string, signal: AbortSignal): Promise<Response> {
+    // Numeric IDs remain supported for already issued historical-version links.
+    if (typeof versionId === "string") {
+      const before = await this.getFile(driveId, fileId, signal);
+      if (!versionId || before.etag !== versionId || before.type === "dir") {
+        throw new BinaryTransferError("The exported file version has changed or is unavailable. Export it again.");
+      }
+      const upstream = await this.fetchBinaryDownload(`/2/drive/${driveId}/files/${fileId}/download`, signal);
+      const reader = upstream.body!.getReader();
+      const client = this;
+      return new Response(new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            signal.throwIfAborted();
+            const next = await reader.read();
+            if (!next.done) { controller.enqueue(next.value); return; }
+            const after = await client.getFile(driveId, fileId, signal);
+            if (after.etag !== versionId || after.size !== before.size) {
+              throw new BinaryTransferError("The exported file version changed during download.");
+            }
+            reader.releaseLock(); controller.close();
+          } catch (error) { await reader.cancel().catch(() => undefined); controller.error(error); }
+        },
+        async cancel() { await reader.cancel(); },
+      }), { headers: upstream.headers });
+    }
+    return this.fetchBinaryDownload(`/2/drive/${driveId}/files/${fileId}/versions/${versionId}/download`, signal);
+  }
+
+  private async fetchBinaryDownload(path: string, signal: AbortSignal): Promise<Response> {
+    const url = this.buildUrl(path);
     const token = await this.tokenProvider.getAccessToken();
     const response = await this.fetchImpl(url, { headers: { authorization: `Bearer ${token}`, accept: "*/*" }, redirect: "manual", signal });
     if ([301, 302, 303, 307, 308].includes(response.status)) {

@@ -199,15 +199,15 @@ test("PDF path resolves to a pinned raw reference consumable without base64", as
   const requests: string[] = [];
   const client = new KDriveClient(config, { getAccessToken: async () => "token" }, async (input) => {
     const url = new URL(String(input)); requests.push(url.pathname);
-    if (url.pathname.endsWith("/versions")) return envelope([{ id: 77, size: bytes.length, created_at: 9 }]);
-    if (url.pathname.endsWith("/download")) { assert.match(url.pathname, /\/versions\/77\/download$/); return new Response(bytes); }
+    if (url.pathname.endsWith("/versions")) return envelope([]);
+    if (url.pathname.endsWith("/download")) { assert.match(url.pathname, /\/files\/6\/download$/); return new Response(bytes); }
     const match = url.pathname.match(/\/files\/(\d+)(\/files)?$/)!;
     const id = Number(match[1]);
     if (!match[2]) return envelope(id === 6 ? file : { id, name: "root", type: "dir" });
     return envelope([id === 5 ? file : { id: id + 1, name: names[id - 1], type: "dir" }]);
   });
   const pinned = await client.resolveBinaryVersion(42, path, deadline());
-  assert.equal(pinned.versionId, 77);
+  assert.equal(pinned.versionId, "v1");
   const response = await client.downloadVersionStream(42, file.id, pinned.versionId, deadline());
   const digest = await hashBinary(response.body!, 10000, deadline());
   const secret = generateOperationSecret();
@@ -217,25 +217,53 @@ test("PDF path resolves to a pinned raw reference consumable without base64", as
   const text = await downloaded.text();
   assert.match(text, /^%PDF/); assert.match(text, /Fixture text/);
   assert.equal(ref.file_name, names.at(-1));
-  assert.equal(ref.resolved_version, "77");
+  assert.equal(ref.resolved_version, "v1");
   assert.equal("content" in ref, false);
   assert.ok(requests.every((request) => !request.endsWith("/preview")));
+  assert.ok(requests.every((request) => !request.endsWith("/versions")));
 });
 
-test("changed ETag or ambiguous newest version fails closed", async () => {
-  for (const ambiguous of [false, true]) {
+test("changed ETag or size fails closed during resolution", async () => {
+  for (const sizeChanges of [false, true]) {
     let reads = 0;
     const client = new KDriveClient(config, { getAccessToken: async () => "token" }, async (input) => {
       const url = new URL(String(input));
-      if (url.pathname.endsWith("/versions")) return envelope(ambiguous
-        ? [{ id: 1, size: 5, created_at: 1 }, { id: 2, size: 5, created_at: 1 }]
-        : [{ id: 1, size: 5, created_at: 1 }]);
       if (url.pathname.endsWith("/files")) return envelope([{ id: 2, name: "file.pdf", type: "pdf" }]);
       if (url.pathname.endsWith("/1")) return envelope({ id: 1, name: "root", type: "dir" });
-      return envelope({ id: 2, name: "file.pdf", type: "pdf", size: 5, etag: ambiguous ? "fixed" : String(++reads) });
+      ++reads;
+      return envelope({ id: 2, name: "file.pdf", type: "pdf", size: sizeChanges ? reads : 5, etag: sizeChanges ? "fixed" : String(reads) });
     });
-    await assert.rejects(() => client.resolveBinaryVersion(42, "/file.pdf", deadline()), /unambiguously pin/);
+    await assert.rejects(() => client.resolveBinaryVersion(42, "/file.pdf", deadline()), /metadata changed/);
   }
+});
+
+test("current ETag exports reject drift before and during streaming", async () => {
+  for (const phase of ["before", "during"] as const) {
+    let reads = 0;
+    let downloads = 0;
+    const client = new KDriveClient(config, { getAccessToken: async () => "token" }, async (input) => {
+      if (String(input).endsWith("/download")) { downloads++; return new Response(new Uint8Array([1, 2])); }
+      reads++;
+      return envelope({ id: 2, type: "file", size: 2, etag: phase === "before" || reads > 1 ? "changed" : "fixed" });
+    });
+    const secret = generateOperationSecret();
+    const ref = await createBinaryExport(secret, "https://connector.example.com", "owner", 42,
+      { id: 2, name: "file.bin", type: "file" }, "fixed", { size_bytes: 2, sha256: sha(new Uint8Array([1, 2])) });
+    const response = await serveBinaryExport(new Request(ref.download_url), ref.download_url.split("/binary/")[1], {
+      client, secret, subject: "owner", driveId: 42,
+    });
+    if (phase === "before") { assert.equal(response.status, 410); assert.equal(downloads, 0); }
+    else { await assert.rejects(() => response.arrayBuffer(), /integrity/); assert.equal(downloads, 1); }
+  }
+});
+
+test("historical version IDs remain supported without resolving the current path", async () => {
+  const client = new KDriveClient(config, { getAccessToken: async () => "token" }, async (input) => {
+    assert.match(String(input), /\/files\/2\/versions\/77\/download$/);
+    return new Response(new Uint8Array([3]));
+  });
+  const response = await client.downloadVersionStream(42, 2, 77, deadline());
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), new Uint8Array([3]));
 });
 
 test("download stream errors rather than silently returning changed bytes", async () => {

@@ -9,6 +9,7 @@ import { createOpenPayload, signKDrivePayload } from "../../src/operation-token.
 import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
 import type { Props } from "./utils";
+import { withoutStandaloneNotifications } from "./mcp-transport";
 export { KDriveOperationNonceStore } from "./operation-nonce-store";
 
 function positiveInteger(value: string, name: string): number {
@@ -95,7 +96,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 }
 
 export default new OAuthProvider({
-	apiHandler: KDriveMCP.serve("/mcp"),
+	apiHandler: withoutStandaloneNotifications(KDriveMCP.serve("/mcp")),
 	apiRoute: "/mcp",
 	authorizeEndpoint: "/authorize",
 	clientRegistrationEndpoint: "/register",

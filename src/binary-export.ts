@@ -4,7 +4,7 @@ import type { KDriveClient, KDriveFile } from "./kdrive-client.js";
 import { assertExportPayload, signKDrivePayload, verifyKDrivePayload } from "./operation-token.js";
 
 export async function createBinaryExport(secret: string, origin: string, subject: string, driveId: number,
-  file: KDriveFile, versionId: number, digest: { size_bytes: number; sha256: string }, now = Date.now()): Promise<BinaryExportReference> {
+  file: KDriveFile, versionId: number | string, digest: { size_bytes: number; sha256: string }, now = Date.now()): Promise<BinaryExportReference> {
   const base = new URL(origin);
   if (base.protocol !== "https:") throw new Error("Binary exports require HTTPS.");
   const expiresAt = now + EXPORT_TTL_MS;

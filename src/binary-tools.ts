@@ -9,7 +9,7 @@ export interface BinaryToolConfig {
   driveId: number;
   maxBinaryBytes?: number;
   binarySourceHosts?: readonly string[];
-  buildBinaryExport?: (file: KDriveFile, versionId: number, digest: { size_bytes: number; sha256: string }) => Promise<BinaryExportReference>;
+  buildBinaryExport?: (file: KDriveFile, versionId: number | string, digest: { size_bytes: number; sha256: string }) => Promise<BinaryExportReference>;
   buildOpenUrl: (file: KDriveFile) => Promise<string> | string;
 }
 

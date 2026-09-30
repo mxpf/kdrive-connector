@@ -48,7 +48,7 @@ export interface ExportTokenPayload {
   type: "export";
   driveId: number;
   fileId: number;
-  versionId: number;
+  versionId: number | string;
   subject: string;
   fileName: string;
   mimeType: string;
@@ -267,7 +267,9 @@ export function assertOpenPayload(payload: KDriveSignedPayload): asserts payload
 export function assertExportPayload(payload: KDriveSignedPayload): asserts payload is ExportTokenPayload {
   if (payload.type !== "export") throw new Error("Invalid binary export link.");
   assertSafePositiveInteger(payload.fileId, "file ID");
-  assertSafePositiveInteger(payload.versionId, "version ID");
+  if (typeof payload.versionId === "string") {
+    if (!payload.versionId.trim() || payload.versionId.length > 1024) throw new Error("Invalid export ETag.");
+  } else assertSafePositiveInteger(payload.versionId, "version ID");
   if (!Number.isSafeInteger(payload.size) || payload.size < 0 || !/^[a-f0-9]{64}$/.test(payload.sha256)
     || !payload.subject || !payload.fileName || !payload.mimeType || payload.expiresAt - payload.issuedAt > 300_000) {
     throw new Error("Invalid binary export link.");
