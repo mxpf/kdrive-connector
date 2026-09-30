@@ -108,7 +108,12 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
     }),
   });
 
-  assert.equal(registrations.size, 14);
+  assert.equal(registrations.size, 17);
+  assert.deepEqual(registrations.get("kdrive_upload_file_ref")!._meta, { "openai/fileParams": ["file_ref"] });
+  const refSchema = (registrations.get("kdrive_upload_file_ref")!.inputSchema as Record<string, { parse: (input: unknown) => unknown }>).file_ref;
+  assert.doesNotThrow(() => refSchema.parse({ file_id: "file-host-issued", download_url: "https://files.oaiusercontent.com/snapshot" }));
+  assert.throws(() => refSchema.parse("/mnt/data/file.epub"));
+  assert.throws(() => refSchema.parse({ file_id: "file-host-issued" }));
   assert.deepEqual(
     [...resourceRegistrations.keys()].sort(),
     ["ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html"],

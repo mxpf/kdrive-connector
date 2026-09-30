@@ -4,6 +4,7 @@ import { McpAgent } from "agents/mcp";
 import type { AppConfig } from "../../src/config.js";
 import { KDriveClient } from "../../src/kdrive-client.js";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "../../src/kdrive-instructions.js";
+import { createBinaryExport } from "../../src/binary-export.js";
 import { createOpenPayload, signKDrivePayload } from "../../src/operation-token.js";
 import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
@@ -54,12 +55,16 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 			consume: (jti: string, now: number) => sharedNonceStore.consume(jti, now),
 		};
 		const connectorBaseUrl = new URL(this.env.KDRIVE_CONNECTOR_BASE_URL).origin;
+		const subject = this.props.login;
 
 		registerKDriveTools(this.server, client, {
 			driveId,
 			maxReadBytes,
 			maxUploadBytes,
 			operationSecret: this.env.KDRIVE_OPERATION_SECRET,
+			maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES"),
+			binarySourceHosts: this.env.KDRIVE_BINARY_SOURCE_HOSTS.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
+			buildBinaryExport: (file, versionId, digest) => createBinaryExport(this.env.KDRIVE_OPERATION_SECRET, connectorBaseUrl, subject, driveId, file, versionId, digest),
 			nonceStore,
 			buildOpenUrl: async (file) => {
 				const payload = createOpenPayload({

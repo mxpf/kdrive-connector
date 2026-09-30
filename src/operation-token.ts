@@ -43,7 +43,22 @@ export interface OpenTokenPayload {
   expiresAt: number;
 }
 
-export type KDriveSignedPayload = OperationTokenPayload | RestoreTokenPayload | OpenTokenPayload;
+export interface ExportTokenPayload {
+  v: 1;
+  type: "export";
+  driveId: number;
+  fileId: number;
+  versionId: number;
+  subject: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  sha256: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+export type KDriveSignedPayload = OperationTokenPayload | RestoreTokenPayload | OpenTokenPayload | ExportTokenPayload;
 
 export interface OperationNonceStore {
   issue(jti: string, expiresAt: number): Promise<void> | void;
@@ -109,7 +124,7 @@ function assertBasePayload(value: unknown): asserts value is KDriveSignedPayload
   if (!value || typeof value !== "object") throw new Error("Invalid signed token payload.");
   const payload = value as Partial<KDriveSignedPayload>;
   if (payload.v !== TOKEN_VERSION) throw new Error("Unsupported signed token version.");
-  if (payload.type !== "operation" && payload.type !== "restore" && payload.type !== "open") {
+  if (payload.type !== "operation" && payload.type !== "restore" && payload.type !== "open" && payload.type !== "export") {
     throw new Error("Invalid signed token type.");
   }
   assertSafePositiveInteger(payload.driveId, "drive ID");
@@ -247,4 +262,14 @@ export function assertOpenPayload(payload: KDriveSignedPayload): asserts payload
   if (payload.type !== "open") throw new Error("This is not a valid kDrive open link.");
   assertSafePositiveInteger(payload.fileId, "file ID");
   if (!payload.path || typeof payload.path !== "string") throw new Error("Invalid open-link path.");
+}
+
+export function assertExportPayload(payload: KDriveSignedPayload): asserts payload is ExportTokenPayload {
+  if (payload.type !== "export") throw new Error("Invalid binary export link.");
+  assertSafePositiveInteger(payload.fileId, "file ID");
+  assertSafePositiveInteger(payload.versionId, "version ID");
+  if (!Number.isSafeInteger(payload.size) || payload.size < 0 || !/^[a-f0-9]{64}$/.test(payload.sha256)
+    || !payload.subject || !payload.fileName || !payload.mimeType || payload.expiresAt - payload.issuedAt > 300_000) {
+    throw new Error("Invalid binary export link.");
+  }
 }

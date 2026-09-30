@@ -88,3 +88,19 @@ OAuth metadata is published at:
 
 Never put `.dev.vars`, API tokens, OAuth client secrets, or cookie encryption
 keys in Git. The included `.gitignore` excludes local secret files.
+
+## Binary handoff
+
+The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and
+`kdrive_upload_from_url`. The `/binary/:token` endpoint serves raw, version-pinned
+bytes via a five-minute signed bearer link; `/open/:token` remains a human-facing
+kDrive navigation link. No new storage binding is required.
+
+`KDRIVE_MAX_BINARY_BYTES` defaults to 104857600 (100 MiB). This does not raise the
+inline/base64 limits. `KDRIVE_BINARY_SOURCE_HOSTS` lists exact trusted source and
+redirect hostnames. Unlisted hosts fail closed, including new host-issued file
+download domains until explicitly reviewed. Never add arbitrary domains or
+wildcards to make a failed fetch succeed.
+
+After deploying, refresh the tool catalog to expose the native file-ref schema.
+See [implementation notes and live acceptance gates](../docs/binary-transport.md).

@@ -26,6 +26,7 @@ import {
   operationalErrorFields,
 } from "./operational-logging.js";
 import { validateName } from "./safety.js";
+import { registerBinaryTools, type BinaryToolConfig } from "./binary-tools.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -133,7 +134,7 @@ const KDRIVE_RESULTS_UI = `
 </body>
 </html>`.trim();
 
-export interface KDriveToolConfig {
+export interface KDriveToolConfig extends BinaryToolConfig {
   driveId: number;
   maxReadBytes: number;
   maxUploadBytes: number;
@@ -447,6 +448,7 @@ export function registerKDriveTools(
   client: KDriveClient,
   config: KDriveToolConfig,
 ): void {
+  registerBinaryTools(server, client, config);
   const resourceServer = server as unknown as {
     registerResource: (
       name: string,
@@ -631,7 +633,7 @@ export function registerKDriveTools(
     "kdrive_read_file",
     {
       title: "Read a kDrive file",
-      description: "Use to read or summarize one known kDrive file by path. Use kdrive_get_file metadata for identification, and reuse connector-side previews when sufficient. Prefer text reads. Request base64 only when the actual attachment is necessary for visual or binary inspection; that mode may require native download approval. Reuse an already materialized file within the task when available instead of requesting it again.",
+      description: "Use to read or summarize one known kDrive file by path. Use kdrive_get_file metadata for identification, and reuse connector-side previews when sufficient. Prefer text reads. For binary handoff to another tool, prefer kdrive_export_file. Base64 is only for small inline files, never large binary transport; it may require native download approval. Reuse an already materialized file within the task when available instead of requesting it again.",
       inputSchema: { path: kdrivePath, mode: z.enum(["text", "base64"]).default("text") },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
@@ -730,7 +732,7 @@ export function registerKDriveTools(
     "kdrive_upload_file",
     {
       title: "Save a new file to kDrive",
-      description: "Use when the user asks to save or upload new content to an exact kDrive path. Existing names fail safely unless the user requests an automatically renamed copy.",
+      description: "Use for text and small inline files at an exact kDrive path. For existing binary assets (PDFs, EPUBs, images, archives, Office or generated files), prefer kdrive_upload_file_ref, then kdrive_upload_from_url. Do not route large binaries through base64 model context. Existing names fail safely unless the user requests an automatically renamed copy.",
       inputSchema: {
         path: kdrivePath.optional(),
         directoryPath: kdrivePath.optional(),

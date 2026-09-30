@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { BINARY_CHUNK_BYTES, BinaryTransferError, binaryChunks, fetchBinarySource } from "./binary-transport.js";
 import type { AppConfig } from "./config.js";
 import { KDriveApiError } from "./errors.js";
 import {
@@ -51,6 +52,9 @@ interface ApiEnvelope<T> {
 }
 
 interface RequestOptions {
+  signal?: AbortSignal;
+  redirect?: "follow" | "error" | "manual";
+  retry401?: boolean;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   query?: Record<string, QueryValue>;
   headers?: Record<string, string>;
@@ -196,11 +200,13 @@ export class KDriveClient {
         method: options.method ?? "GET",
         headers,
         body,
+        signal: options.signal,
+        redirect: options.redirect,
       });
     };
 
     let response = await makeRequest(false);
-    if (response.status === 401) {
+    if (response.status === 401 && options.retry401 !== false) {
       refreshedAccessToken = true;
       response = await makeRequest(true);
     }
@@ -257,10 +263,11 @@ export class KDriveClient {
     return response.data ?? {};
   }
 
-  async getFile(driveId: number, fileId: number): Promise<KDriveFile> {
+  async getFile(driveId: number, fileId: number, signal?: AbortSignal): Promise<KDriveFile> {
     const response = await this.jsonRequest<KDriveFile>(`/3/drive/${driveId}/files/${fileId}`, {
       query: { with: "path,etag,capabilities,parents" },
       diagnostics: { operation: "get_file" },
+      signal,
     });
     if (!response.data) throw new KDriveApiError("Infomaniak returned no file metadata.");
     return response.data;
@@ -269,7 +276,7 @@ export class KDriveClient {
   async listDirectory(
     driveId: number,
     directoryId: number,
-    options: { cursor?: string; limit?: number } = {},
+    options: { cursor?: string; limit?: number; signal?: AbortSignal } = {},
   ): Promise<CursorPage<KDriveFile>> {
     const response = await this.jsonRequest<KDriveFile[]>(`/3/drive/${driveId}/files/${directoryId}/files`, {
       query: {
@@ -278,6 +285,7 @@ export class KDriveClient {
         with: "path,etag,capabilities",
       },
       diagnostics: { operation: "list_directory" },
+      signal: options.signal,
     });
     return {
       data: response.data ?? [],
@@ -287,11 +295,11 @@ export class KDriveClient {
     };
   }
 
-  async resolvePath(driveId: number, path: string): Promise<KDriveFile> {
+  async resolvePath(driveId: number, path: string, signal?: AbortSignal): Promise<KDriveFile> {
     const normalized = normalizeKDrivePath(path);
-    if (normalized === "/") return this.getFile(driveId, 1);
+    if (normalized === "/") return this.getFile(driveId, 1, signal);
 
-    let current: KDriveFile = await this.getFile(driveId, 1);
+    let current: KDriveFile = await this.getFile(driveId, 1, signal);
     for (const segment of normalized.slice(1).split("/")) {
       if (current.type !== "dir") {
         throw new Error(`Cannot resolve ${normalized}: ${current.path ?? current.name} is not a folder.`);
@@ -301,7 +309,7 @@ export class KDriveClient {
       const caseInsensitiveMatches: KDriveFile[] = [];
       let cursor: string | undefined;
       do {
-        const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000 });
+        const page = await this.listDirectory(driveId, current.id, { cursor, limit: 1000, signal });
         exactMatches.push(...page.data.filter((item) => item.name.normalize("NFC") === segment));
         caseInsensitiveMatches.push(...page.data.filter(
           (item) => item.name.normalize("NFC") !== segment
@@ -365,6 +373,108 @@ export class KDriveClient {
       bytes: await readResponseBytes(response, options.maxBytes),
       contentType: response.headers.get("content-type") ?? "application/octet-stream",
     };
+  }
+
+  /** Pin the newest immutable version while detecting concurrent changes. */
+  async resolveBinaryVersion(driveId: number, path: string, signal: AbortSignal) {
+    const resolved = await this.resolvePath(driveId, path, signal);
+    const before = await this.getFile(driveId, resolved.id, signal);
+    if (before.type === "dir" || !before.etag) throw new BinaryTransferError("Binary export requires a file with a version ETag.");
+    const versions = await this.jsonRequest<Array<{ id: number; size: number; mime_type?: string; created_at: number }>>(
+      `/3/drive/${driveId}/files/${before.id}/versions`, {
+        query: { per_page: 2, order_by: "created_at", order: "desc" }, signal,
+      },
+    );
+    const version = versions.data?.[0];
+    const after = await this.getFile(driveId, before.id, signal);
+    if (!version || !Number.isSafeInteger(version.id) || version.id <= 0 || version.size !== before.size
+      || before.etag !== after.etag || versions.data?.[1]?.created_at === version.created_at) {
+      throw new BinaryTransferError("Cannot unambiguously pin the current file version. Retry after the file stops changing.");
+    }
+    return { file: before, versionId: version.id };
+  }
+
+  async downloadVersionStream(driveId: number, fileId: number, versionId: number, signal: AbortSignal): Promise<Response> {
+    const url = this.buildUrl(`/2/drive/${driveId}/files/${fileId}/versions/${versionId}/download`);
+    const token = await this.tokenProvider.getAccessToken();
+    const response = await this.fetchImpl(url, { headers: { authorization: `Bearer ${token}`, accept: "*/*" }, redirect: "manual", signal });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      await response.body?.cancel();
+      const target = new URL(response.headers.get("location") ?? "", url);
+      // CDN bearer URLs are followed without forwarding the API credential.
+      if (target.hostname !== "download.kdrive.infomaniakusercontent.com"
+        && !target.hostname.endsWith(".download.kdrive.infomaniakusercontent.com")) {
+        throw new BinaryTransferError("Unexpected kDrive binary download destination.");
+      }
+      return fetchBinarySource(target.href, [target.hostname], signal, this.fetchImpl);
+    }
+    if (response.status !== 200 || !response.body) {
+      await response.body?.cancel();
+      throw new BinaryTransferError("The pinned kDrive version is unavailable.");
+    }
+    return response;
+  }
+
+  /** Stream into an uncommitted upload session; integrity is checked before finish. */
+  async uploadBinary(driveId: number, input: {
+    body: ReadableStream<Uint8Array>; size: number; fileName: string; directoryId: number;
+    expectedSha256?: string; signal: AbortSignal;
+  }): Promise<{ file: KDriveFile; size_bytes: number; sha256: string }> {
+    let session: { token: string; upload_url: string } | undefined;
+    let finished = false;
+    let finalizationStarted = false;
+    try {
+      const started = await this.jsonRequest<{ token: string; upload_url: string }>(`/3/drive/${driveId}/upload/session/start`, {
+        method: "POST", signal: input.signal, redirect: "error", retry401: false,
+        json: { directory_id: input.directoryId, file_name: input.fileName, conflict: "error", total_size: input.size, total_chunks: Math.ceil(input.size / BINARY_CHUNK_BYTES) },
+      });
+      session = started.data;
+      if (!session || !/^[a-zA-Z0-9_-]{1,128}$/.test(session.token)) throw new BinaryTransferError("kDrive did not create a valid binary upload session.");
+      const uploadUrl = new URL(session.upload_url);
+      if (uploadUrl.protocol !== "https:" || uploadUrl.username || uploadUrl.password || uploadUrl.port
+        || !["api.infomaniak.com", "api.kdrive.infomaniak.com"].includes(uploadUrl.hostname)) {
+        throw new BinaryTransferError("Unexpected kDrive upload destination.");
+      }
+      const hash = createHash("sha256");
+      let chunkNumber = 0;
+      let size = 0;
+      for await (const chunk of binaryChunks(input.body, input.size, input.signal)) {
+        hash.update(chunk);
+        size += chunk.byteLength;
+        const digest = createHash("sha256").update(chunk).digest("hex");
+        chunkNumber++;
+        const appended = await this.jsonRequest<{ status: string }>(uploadUrl.href, {
+          method: "POST", body: chunk, signal: input.signal, redirect: "error", retry401: false,
+          query: { chunk_number: chunkNumber, chunk_size: chunk.byteLength, chunk_hash: `sha256:${digest}` },
+        });
+        if (appended.data?.status !== "ok") throw new BinaryTransferError("kDrive rejected a binary upload chunk.");
+      }
+      const digest = hash.digest("hex");
+      if (size !== input.size || (input.expectedSha256 && digest !== input.expectedSha256.toLowerCase())) {
+        throw new BinaryTransferError("Binary integrity check failed; the upload was not finalized.");
+      }
+      // Each chunk is independently verified by the provider. Avoid assuming a
+      // text-vs-raw encoding for the optional aggregate hash of chunk hashes.
+      finalizationStarted = true;
+      const result = await this.jsonRequest<{ result: boolean; file: KDriveFile }>(`/3/drive/${driveId}/upload/session/${session.token}/finish`, {
+        method: "POST", json: {}, query: { with: "path,etag,version" }, signal: input.signal, redirect: "error", retry401: false,
+      });
+      if (result.data?.result !== true || !result.data.file) throw new BinaryTransferError("kDrive did not confirm binary upload completion. Check the destination before retrying.");
+      finished = true;
+      if (result.data.file.size !== size) throw new BinaryTransferError("kDrive returned an unexpected completed file size. Check the destination before retrying.");
+      return { file: result.data.file, size_bytes: size, sha256: digest };
+    } catch (error) {
+      if (error instanceof BinaryTransferError) throw error;
+      // Provider errors may echo signed URLs or credentials; never return them.
+      throw new BinaryTransferError("Binary upload failed or timed out. Check the destination before retrying if finalization may have started.");
+    } finally {
+      await input.body.cancel().catch(() => undefined);
+      if (session && !finished && !finalizationStarted && /^[a-zA-Z0-9_-]{1,128}$/.test(session.token)) {
+        await this.jsonRequest(`/3/drive/${driveId}/upload/session/${session.token}`, {
+          method: "DELETE", signal: AbortSignal.timeout(10_000), redirect: "error",
+        }).catch(() => undefined); // Provider also automatically expires unfinished sessions.
+      }
+    }
   }
 
   async downloadText(

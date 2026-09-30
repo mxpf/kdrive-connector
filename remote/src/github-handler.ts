@@ -9,6 +9,8 @@ import {
 } from "./utils";
 import { assertOpenPayload, verifyKDrivePayload } from "../../src/operation-token.js";
 import { logOperationalError, logOperationalInfo } from "../../src/operational-logging.js";
+import { serveBinaryExport } from "../../src/binary-export.js";
+import { KDriveClient } from "../../src/kdrive-client.js";
 import {
 	addApprovedClient,
 	bindStateToSession,
@@ -41,6 +43,17 @@ app.use("*", async (c, next) => {
 		durationMs: Date.now() - startedAt,
 		httpStatus: c.res.status,
 		ok: c.res.ok,
+	});
+});
+
+app.on(["GET", "HEAD"], "/binary/:token", async (c) => {
+	const client = new KDriveClient({
+		apiBaseUrl: "https://api.infomaniak.com", authorizeUrl: "", tokenUrl: "", redirectUri: "",
+		oauthScope: "drive", tokenFile: "", maxReadBytes: 0, maxUploadBytes: 0,
+	}, { getAccessToken: async () => c.env.KDRIVE_ACCESS_TOKEN });
+	return serveBinaryExport(c.req.raw, c.req.param("token"), {
+		secret: c.env.KDRIVE_OPERATION_SECRET, subject: c.env.ALLOWED_GITHUB_LOGIN,
+		driveId: Number(c.env.KDRIVE_DRIVE_ID), maxBytes: Number(c.env.KDRIVE_MAX_BINARY_BYTES), client,
 	});
 });
 

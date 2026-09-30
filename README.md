@@ -221,9 +221,27 @@ available independently of this package.
 - Overwrite binds and enforces the current file version and an exact digest of the replacement bytes, preventing a stale or substituted write.
 - Trash is recoverable through an opaque undo token; permanent-delete API operations are not available.
 - Results contain private, expiring Open in kDrive redirect links instead of public share links. Search adds bounded text previews when conversion is supported and a concise type/size preview otherwise. ChatGPT-compatible hosts also receive a native MCP Apps result card with clickable Open in kDrive buttons; structured data, resource links, and Markdown remain available as fallbacks.
-- Reads default to 2 MiB and uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`.
+- Inline reads default to 2 MiB and inline uploads to 10 MiB. Override with `KDRIVE_MAX_READ_BYTES` and `KDRIVE_MAX_UPLOAD_BYTES`. Reference-based transfers have a separate 100 MiB default limit.
 
 The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The legacy package needs an active app mapping before use, as described above. If a user asks only to preview a change, the skill prevents both prepare and write tools from running. These core workflow safeguards are also supplied by the server, so the current remote app does not depend on the separate skill package.
+
+## Binary interoperability
+
+For binary files, use **native file reference first, signed HTTPS fallback, inline base64 only for small files**. The model exchanges references and metadata, not file bytes.
+
+| Direction | Action | Transport |
+| --- | --- | --- |
+| kDrive → another tool | `kdrive_export_file(path)` | Pinned-version raw HTTPS download plus MCP `resource_link` |
+| ChatGPT attachment/generated file → kDrive | `kdrive_upload_file_ref(path, file_ref)` | Host-supplied `{file_id, download_url, mime_type?, file_name?}` |
+| HTTPS asset → kDrive | `kdrive_upload_from_url(path, source_url, expected_size?, expected_sha256?)` | Server-side chunked transfer |
+
+Export returns `file_name`, `mime_type`, `size_bytes`, `sha256`, `resolved_version`, `expires_at`, and `download_url`. Unlike `openUrl`, the five-minute download URL serves actual bytes without a browser login. It is a private bearer capability: give it only to the intended downstream tool. The connector does not mint an OpenAI file ID; hosts may materialize the MCP resource link, otherwise pass the HTTPS URL to a URL-capable consumer. A tool that accepts only its own proprietary asset IDs still needs that tool's ingestion step.
+
+Native inputs use OpenAI's documented `_meta["openai/fileParams"]` contract. A bare `file_id`, `/mnt/data/...`, or `sandbox:/...` string is **not** a remote file reference. The host must supply its temporary `download_url`. Reference upload never looks up another file by name. Existing destinations fail safely; these tools do not overwrite or automatically rename.
+
+Uploads use an Infomaniak upload session, bounded 4 MiB buffers, incremental SHA-256, and per-chunk provider checksums. Size and optional expected SHA-256 are checked **before finalization**. No full-file buffering, base64 transport, new storage service, or source-URL persistence is involved. Supply `expected_size` if the source lacks Content-Length. Empty files can still use the inline action.
+
+See [binary transport implementation and acceptance plan](docs/binary-transport.md) for security boundaries, configuration, limits, and the distinction between automated contract tests and pending live ChatGPT/Acrobat acceptance tests.
 
 ## Development checks
 

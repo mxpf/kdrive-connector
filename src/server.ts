@@ -31,6 +31,7 @@ registerKDriveTools(server, client, {
   driveId,
   maxReadBytes: config.maxReadBytes,
   maxUploadBytes: config.maxUploadBytes,
+  binarySourceHosts: process.env.KDRIVE_BINARY_SOURCE_HOSTS?.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
   operationSecret: generateOperationSecret(),
   nonceStore: new MemoryOperationNonceStore(),
   buildOpenUrl: (file) => `https://ksuite.infomaniak.com/all/kdrive/app/drive/${driveId}/files/${file.id}`,
