@@ -33,14 +33,21 @@ export function isPublicAddress(address: string): boolean {
     && !/^200[12]:/i.test(address);
 }
 
-export async function assertPublicDns(host: string): Promise<void> {
-  const resolve = async (family: typeof resolve4 | typeof resolve6) => {
+export async function assertPublicDns(host: string, resolvers: {
+  ipv4: (host: string) => Promise<string[]>;
+  ipv6: (host: string) => Promise<string[]>;
+} = { ipv4: resolve4, ipv6: resolve6 }): Promise<void> {
+  const resolve = async (family: (host: string) => Promise<string[]>) => {
     try { return await family(host); } catch (error) {
-      if ((error as { code?: string }).code === "ENODATA") return [];
+      // workerd reports an absent AAAA record as ENOTFOUND where Node uses
+      // ENODATA. Absence is allowed only if the other family supplies public
+      // addresses; neither empty DNS nor other resolution errors are accepted.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === "ENODATA" || code === "ENOTFOUND") return [];
       throw new BinaryTransferError("Could not verify the binary source network destination.");
     }
   };
-  const addresses = (await Promise.all([resolve(resolve4), resolve(resolve6)])).flat();
+  const addresses = (await Promise.all([resolve(resolvers.ipv4), resolve(resolvers.ipv6)])).flat();
   if (!addresses.length || addresses.some((address) => !isPublicAddress(address))) {
     throw new BinaryTransferError("Binary source resolves to a non-public network destination.");
   }
