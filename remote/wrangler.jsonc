@@ -24,7 +24,7 @@
    */
   "vars": {
     "KDRIVE_MAX_BINARY_BYTES": "104857600",
-    "KDRIVE_BINARY_SOURCE_HOSTS": "files.oaiusercontent.com,sandbox.openai.com",
+    "KDRIVE_BINARY_SOURCE_HOSTS": "files.oaiusercontent.com,sandbox.openai.com,sdmntprcentralus.oaiusercontent.com,sdmntprnorthcentralus.oaiusercontent.com,sdmntprsoutheastus3.oaiusercontent.com,sdmntpreastus2.oaiusercontent.com,oaisdmntprnorthcentralus.blob.core.windows.net",
 		"ALLOWED_GITHUB_LOGIN": "mxpf",
 		"KDRIVE_CONNECTOR_BASE_URL": "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
 		"KDRIVE_MAX_READ_BYTES": "2097152",

@@ -13,7 +13,9 @@ export interface BinaryToolConfig {
   buildOpenUrl: (file: KDriveFile) => Promise<string> | string;
 }
 
-export const DEFAULT_BINARY_SOURCE_HOSTS = ["files.oaiusercontent.com", "sandbox.openai.com"] as const;
+// Exact host observed in a successful host-managed file transfer (2026-09-29).
+// Do not broaden this to all regional/shared-storage subdomains.
+export const DEFAULT_BINARY_SOURCE_HOSTS = ["files.oaiusercontent.com", "sandbox.openai.com", "sdmntprcentralus.oaiusercontent.com", "sdmntprnorthcentralus.oaiusercontent.com", "sdmntprsoutheastus3.oaiusercontent.com", "sdmntpreastus2.oaiusercontent.com", "oaisdmntprnorthcentralus.blob.core.windows.net"] as const;
 
 export function registerBinaryTools(server: Pick<McpServer, "registerTool">, client: KDriveClient, config: BinaryToolConfig) {
   const maxBytes = config.maxBinaryBytes ?? BINARY_MAX_BYTES;
@@ -56,7 +58,7 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
 
   server.registerTool("kdrive_export_file", {
     title: "Export a kDrive binary file reference",
-    description: "Preferred for handing a known PDF, EPUB, image, archive or other binary to another tool. Pins the current version and returns metadata, SHA-256 and a short-lived HTTPS URL serving raw bytes, plus an MCP resource link. Do not use openUrl or inline base64 as binary transport. The URL is a private bearer capability: pass only to the intended tool, never publish it. Export does not modify kDrive.",
+    description: "Primary download action for known PDFs, EPUBs, images, Office documents, archives and other binaries, including files larger than the 2 MiB inline read limit (up to the configured binary limit, normally 100 MiB). Pins the current version and returns filename, MIME, size, version, SHA-256, expires_at, a five-minute HTTPS download_url serving raw bytes, and an MCP resource link. Do not use openUrl or inline base64 as binary transport. Pass the URL only to tools accepting raw HTTPS; otherwise use the host's supported streamed local-file/materialization bridge and native file adapter. A URL/resource link is not automatically a ChatGPT file_id. Refresh expired references by calling this action again and compare resolved_version before continuing. The URL is a private bearer capability: never publish it. Export does not modify kDrive.",
     inputSchema: { path: z.string().min(1).max(4096) },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, async ({ path }) => {
@@ -79,7 +81,7 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
   });
   server.registerTool("kdrive_upload_file_ref", {
     title: "Upload a ChatGPT file to kDrive",
-    description: "Preferred binary upload for generated files and conversation attachments (PDF, EPUB, ZIP, images, Office and other files). Pass the native host file object; the server streams its download_url into a conflict-safe kDrive upload. Never read or base64-encode the bytes in model context. Bare sandbox paths or file IDs are not remotely downloadable. No overwrite or automatic rename.",
+    description: "Preferred binary upload for a generated conversation file or attachment (PNG, PDF, EPUB, ZIP, images, Office and other files). Select the existing file using the host's file-parameter mechanism. The host resolves that selection to a file object before calling this server; do not manually construct an object, download URL, or base64 payload. A host may expose a string selection handle to the model: follow that host's file-input instructions, not the raw server object schema. The server cannot resolve a bare local path, sandbox URI, or file ID itself. If host resolution fails, stop instead of trying alternate string spellings. Streams bytes to the exact destination; no overwrite or automatic rename.",
     inputSchema: {
       path,
       file_ref: z.object({ download_url: z.string().min(1).max(16384), file_id: z.string().min(1), mime_type: z.string().optional(), file_name: z.string().optional() }),

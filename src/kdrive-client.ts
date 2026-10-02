@@ -222,6 +222,15 @@ export class KDriveClient {
       });
     }
     if (!response.ok) {
+      if (options.body && options.redirect === "manual" && response.status >= 300 && response.status < 400) {
+        const from = this.buildUrl(endpoint, options.query);
+        let target: URL | undefined;
+        try { const location = response.headers.get("location"); if (location) target = new URL(location, from); } catch { /* malformed redirect */ }
+        await response.body?.cancel();
+        const host = target && /^(?:[a-z0-9-]{1,63}\.)*infomaniak\.com$/.test(target.hostname) ? target.hostname : "unapproved-or-missing";
+        const shape = (url: URL | undefined) => url?.pathname.split("/").map(part => /^(?:api|upload|session|chunk|drive|login|auth|app|apps|web|index\.html|[23])$/.test(part) ? part : part ? "[redacted]" : "").join("/") ?? "missing";
+        throw new BinaryTransferError(`Binary chunk redirect rejected (HTTP ${response.status}); host=${host}; sourcePathShape=${shape(from)}; targetPathShape=${shape(target)}; sameOrigin=${target?.origin === from.origin}; samePath=${target?.pathname === from.pathname}; sameQuery=${target?.search === from.search}. No redirect followed; finalization not started.`);
+      }
       const payload = (await response.json().catch(() => undefined)) as ApiEnvelope<unknown> | undefined;
       const message = payload?.error?.description ?? `Infomaniak API request failed with HTTP ${response.status}.`;
       throw new KDriveApiError(message, response.status, payload?.error?.code, payload?.error);
@@ -450,19 +459,35 @@ export class KDriveClient {
     let session: { token: string; upload_url: string } | undefined;
     let finished = false;
     let finalizationStarted = false;
+    let stage = "session start";
     try {
+      // workerd rejects redirect:error. Manual never follows redirects;
+      // rawRequest rejects every non-2xx response, including all 3xx statuses.
       const started = await this.jsonRequest<{ token: string; upload_url: string }>(`/3/drive/${driveId}/upload/session/start`, {
-        method: "POST", signal: input.signal, redirect: "error", retry401: false,
+        method: "POST", signal: input.signal, redirect: "manual", retry401: false,
         json: { directory_id: input.directoryId, file_name: input.fileName, conflict: "error", total_size: input.size, total_chunks: Math.ceil(input.size / BINARY_CHUNK_BYTES) },
       });
       session = started.data;
+      stage = "session response validation";
       if (!session || !/^[a-zA-Z0-9_-]{1,128}$/.test(session.token)) throw new BinaryTransferError("kDrive did not create a valid binary upload session.");
-      const uploadUrl = new URL(session.upload_url);
+      let uploadUrl: URL;
+      try { uploadUrl = new URL(session.upload_url); }
+      catch { throw new BinaryTransferError("kDrive returned a missing or non-absolute upload URL. No chunks were sent."); }
       if (uploadUrl.protocol !== "https:" || uploadUrl.username || uploadUrl.password || uploadUrl.port
-        || !["api.infomaniak.com", "api.kdrive.infomaniak.com"].includes(uploadUrl.hostname)) {
-        throw new BinaryTransferError("Unexpected kDrive upload destination.");
+        || !["api.infomaniak.com", "api.kdrive.infomaniak.com", "1-14-v3-12.upload.kdrive.infomaniak.com"].includes(uploadUrl.hostname)) {
+        const host = /^[a-z0-9.-]{1,120}\.(?:infomaniak\.com|infomaniakusercontent\.com)$/.test(uploadUrl.hostname) ? ` Rejected hostname: ${uploadUrl.hostname}.` : "";
+        throw new BinaryTransferError(`Unexpected kDrive upload destination.${host}`);
       }
+      // Live start responses return an origin, not necessarily a complete route.
+      // Bind the request to this exact drive/session. Never POST to the web root
+      // or follow the resulting web-app redirect with credentials and file bytes.
+      const chunkPath = `/3/drive/${driveId}/upload/session/${session.token}/chunk`;
+      if (uploadUrl.search || uploadUrl.hash || (uploadUrl.pathname !== "/" && uploadUrl.pathname !== chunkPath)) {
+        throw new BinaryTransferError("kDrive returned an unexpected upload path or query. No chunks were sent.");
+      }
+      uploadUrl.pathname = chunkPath;
       const hash = createHash("sha256");
+      stage = "source read";
       let chunkNumber = 0;
       let size = 0;
       for await (const chunk of binaryChunks(input.body, input.size, input.signal)) {
@@ -470,11 +495,13 @@ export class KDriveClient {
         size += chunk.byteLength;
         const digest = createHash("sha256").update(chunk).digest("hex");
         chunkNumber++;
+        stage = "chunk upload";
         const appended = await this.jsonRequest<{ status: string }>(uploadUrl.href, {
-          method: "POST", body: chunk, signal: input.signal, redirect: "error", retry401: false,
+          method: "POST", body: chunk, signal: input.signal, redirect: "manual", retry401: false,
           query: { chunk_number: chunkNumber, chunk_size: chunk.byteLength, chunk_hash: `sha256:${digest}` },
         });
         if (appended.data?.status !== "ok") throw new BinaryTransferError("kDrive rejected a binary upload chunk.");
+        stage = "source read";
       }
       const digest = hash.digest("hex");
       if (size !== input.size || (input.expectedSha256 && digest !== input.expectedSha256.toLowerCase())) {
@@ -483,8 +510,9 @@ export class KDriveClient {
       // Each chunk is independently verified by the provider. Avoid assuming a
       // text-vs-raw encoding for the optional aggregate hash of chunk hashes.
       finalizationStarted = true;
+      stage = "finalization";
       const result = await this.jsonRequest<{ result: boolean; file: KDriveFile }>(`/3/drive/${driveId}/upload/session/${session.token}/finish`, {
-        method: "POST", json: {}, query: { with: "path,etag,version" }, signal: input.signal, redirect: "error", retry401: false,
+        method: "POST", json: {}, query: { with: "path" }, signal: input.signal, redirect: "manual", retry401: false,
       });
       if (result.data?.result !== true || !result.data.file) throw new BinaryTransferError("kDrive did not confirm binary upload completion. Check the destination before retrying.");
       finished = true;
@@ -493,12 +521,15 @@ export class KDriveClient {
     } catch (error) {
       if (error instanceof BinaryTransferError) throw error;
       // Provider errors may echo signed URLs or credentials; never return them.
-      throw new BinaryTransferError("Binary upload failed or timed out. Check the destination before retrying if finalization may have started.");
+      const status = error instanceof KDriveApiError && Number.isInteger(error.status) && error.status >= 100 && error.status <= 599
+        ? ` (HTTP ${error.status})` : "";
+      const category = input.signal.aborted ? " Transfer deadline expired." : error instanceof TypeError ? " Request or response type error." : error instanceof SyntaxError ? " Invalid JSON response." : "";
+      throw new BinaryTransferError(`Binary upload failed during ${stage}${status}.${category} ${finalizationStarted ? "Check the destination before retrying; finalization may have started." : "Finalization was not started."}`);
     } finally {
       await input.body.cancel().catch(() => undefined);
       if (session && !finished && !finalizationStarted && /^[a-zA-Z0-9_-]{1,128}$/.test(session.token)) {
         await this.jsonRequest(`/3/drive/${driveId}/upload/session/${session.token}`, {
-          method: "DELETE", signal: AbortSignal.timeout(10_000), redirect: "error",
+          method: "DELETE", signal: AbortSignal.timeout(10_000), redirect: "manual",
         }).catch(() => undefined); // Provider also automatically expires unfinished sessions.
       }
     }

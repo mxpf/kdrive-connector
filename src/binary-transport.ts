@@ -47,7 +47,17 @@ export async function assertPublicDns(host: string, resolvers: {
       throw new BinaryTransferError("Could not verify the binary source network destination.");
     }
   };
-  const addresses = (await Promise.all([resolve(resolvers.ipv4), resolve(resolvers.ipv6)])).flat();
+  const answers = (await Promise.all([resolve(resolvers.ipv4), resolve(resolvers.ipv6)])).flat();
+  // workerd can include CNAME targets in resolve4/resolve6 results. They are
+  // aliases, not addresses. Validate actual IPs; alias-only answers still fail.
+  const addresses: string[] = [];
+  for (const answer of answers) {
+    if (isIP(answer)) { addresses.push(answer); continue; }
+    const name = answer.endsWith(".") ? answer.slice(0, -1) : answer;
+    if (name.length > 253 || !name.includes(".") || !name.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
+      throw new BinaryTransferError("Could not verify the binary source network destination.");
+    }
+  }
   if (!addresses.length || addresses.some((address) => !isPublicAddress(address))) {
     throw new BinaryTransferError("Binary source resolves to a non-public network destination.");
   }
@@ -56,14 +66,25 @@ export async function assertPublicDns(host: string, resolvers: {
 // Exact administrator-controlled hosts only. Never accept suffix wildcards or
 // arbitrary user-supplied domains: a DNS preflight alone is vulnerable to rebinding.
 export function validateSourceUrl(value: string, trustedHosts: readonly string[]): URL {
+  if (/^(?:\/|sandbox:|file:|file[_-])/i.test(value)) {
+    throw new BinaryTransferError("File reference was not resolved to an HTTPS download URL. Select the conversation file through the host file-parameter adapter; do not retry with a local path, sandbox URI, or bare file ID.");
+  }
   let url: URL;
   try { url = new URL(value); } catch { throw new BinaryTransferError("Invalid binary source URL."); }
   const host = url.hostname.toLowerCase();
   if (url.protocol !== "https:" || url.username || url.password || url.hash || (url.port && url.port !== "443")
     || host.startsWith("[") || isIP(host) || !host.includes(".") || host.endsWith(".")
     || /(?:^|\.)(?:localhost|local|internal|localdomain|test|invalid)$/.test(host)
-    || host === "metadata.google.internal" || !trustedHosts.includes(host)) {
+    || host === "metadata.google.internal") {
     throw new BinaryTransferError("Binary source is not an approved public HTTPS host. Use a host-issued file reference or ask the administrator to approve its exact trusted download host.");
+  }
+  if (!trustedHosts.includes(host)) {
+    // No URL path, query, credentials, or user-supplied file ID in diagnostics.
+    // Report only a bounded regional OpenAI hostname, never arbitrary host data.
+    // This is diagnostic evidence, not automatic permission to fetch it.
+    const diagnosticHost = /^sdmnt[a-z0-9-]{1,48}\.oaiusercontent\.com$/.test(host) ? ` Rejected hostname: ${host}.` : "";
+    const provider = host.endsWith(".oaiusercontent.com") ? "OpenAI file host" : "source host";
+    throw new BinaryTransferError(`Binary ${provider} is not on the exact trusted-host allowlist.${diagnosticHost} The file adapter supplied an HTTPS URL, but source policy rejected it. Ask the administrator to verify its hostname privately; do not construct another URL or retry with a local path.`);
   }
   return url;
 }

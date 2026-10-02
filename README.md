@@ -241,7 +241,11 @@ Native inputs use OpenAI's documented `_meta["openai/fileParams"]` contract. A b
 
 Uploads use an Infomaniak upload session, bounded 4 MiB buffers, incremental SHA-256, and per-chunk provider checksums. Size and optional expected SHA-256 are checked **before finalization**. No full-file buffering, base64 transport, new storage service, or source-URL persistence is involved. Supply `expected_size` if the source lacks Content-Length. Empty files can still use the inline action.
 
-See [binary transport implementation and acceptance plan](docs/binary-transport.md) for security boundaries, configuration, limits, and the distinction between automated contract tests and pending live ChatGPT/Acrobat acceptance tests.
+**Live status (2026-10-01):** The 27 MB *Wisdom of Laotse* PDF exported and streamed to a verified local file with matching size/SHA-256, and a downstream PDF tool opened and rendered it. Acrobat accepted the host-file handoff but failed processing that document; universal cross-plugin compatibility is not claimed. Both Codex-generated and ChatGPT-generated PNG uploads now have independently verified kDrive download hashes. Unknown file-host regions still fail closed. See the [live acceptance evidence and working routes](docs/binary-interop-acceptance.md).
+
+For files larger than the inline read limit, use **`kdrive_export_file`**, not `kdrive_read_file(mode="base64")`. Its `download_url` serves bytes; `openUrl` opens a human-facing page. If a downstream tool needs a local/native file rather than an HTTPS URL, the Node host bridge in [`src/binary-materialize.ts`](src/binary-materialize.ts) streams and verifies the export before returning `local_path`. The CLI (`npm run build`, then `node dist/download-cli.js`) accepts the reference JSON on **stdin** and outputs bounded metadata plus the verified local path. Never paste signed URLs into shell arguments or logs. Pass that path only to a downstream host adapter that explicitly accepts local files. ChatGPT runtimes without such a bridge cannot be made compatible by inventing a `file_id`.
+
+See [binary transport implementation and acceptance plan](docs/binary-transport.md) for security boundaries, configuration, limits, and automated versus live acceptance coverage.
 
 ## Development checks
 

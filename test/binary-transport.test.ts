@@ -7,29 +7,32 @@ import { loadConfig } from "../src/config.js";
 import { KDriveClient } from "../src/kdrive-client.js";
 import { generateOperationSecret } from "../src/operation-token.js";
 import { generatedEpub } from "./binary-fixtures.js";
+import { DEFAULT_BINARY_SOURCE_HOSTS } from "../src/binary-tools.js";
 
 const config = loadConfig({ INFOMANIAK_API_BASE_URL: "https://api.infomaniak.com", INFOMANIAK_DRIVE_ID: "42" });
 const deadline = () => AbortSignal.timeout(10_000);
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const envelope = (data: unknown) => Response.json({ result: "success", data });
 
-function uploadHarness(options: { failChunk?: boolean; failFinish?: boolean } = {}) {
+function uploadHarness(options: { failChunk?: boolean; failFinish?: boolean; redirectChunk?: string; uploadUrl?: string } = {}) {
   const chunks: Uint8Array[] = [];
   let finalized = 0;
   let canceled = 0;
   let declaredSize = 0;
   const fakeFetch: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
-    assert.equal(init?.redirect, "error");
+    assert.equal(init?.redirect, "manual");
     if (url.pathname.endsWith("/start")) {
       const body = JSON.parse(String(init?.body));
       assert.equal(body.conflict, "error");
       assert.equal(body.file_id, undefined);
       declaredSize = body.total_size;
       assert.equal(body.total_chunks, Math.ceil(declaredSize / BINARY_CHUNK_BYTES));
-      return envelope({ token: "test-session", upload_url: "https://api.kdrive.infomaniak.com/3/drive/42/upload/session/test-session/chunk" });
+      return envelope({ token: "test-session", upload_url: options.uploadUrl ?? "https://1-14-v3-12.upload.kdrive.infomaniak.com/" });
     }
     if (url.pathname.endsWith("/chunk")) {
+      assert.equal(url.pathname, "/3/drive/42/upload/session/test-session/chunk");
+      if (options.redirectChunk) return new Response(null, { status: 302, headers: { location: options.redirectChunk } });
       assert.ok(init?.body instanceof Uint8Array);
       const bytes = new Uint8Array(init.body);
       assert.equal(url.searchParams.get("chunk_hash"), `sha256:${sha(bytes)}`);
@@ -40,6 +43,7 @@ function uploadHarness(options: { failChunk?: boolean; failFinish?: boolean } = 
     }
     if (init?.method === "DELETE") { canceled++; return envelope(true); }
     if (url.pathname.endsWith("/finish")) {
+      assert.equal(url.searchParams.get("with"), "path");
       finalized++;
       if (options.failFinish) throw new Error("private source credential must not escape");
       return envelope({ result: true, file: { id: 99, name: "fixture.epub", type: "file", etag: "new-version", size: declaredSize } });
@@ -93,7 +97,7 @@ test("50 MiB streams incrementally with backpressure, never as a full-file buffe
     maxAhead = Math.max(maxAhead, generated - uploaded); controller.enqueue(chunk);
   } });
   const fakeFetch: typeof fetch = async (url, init) => {
-    if (String(url).includes("/start")) return envelope({ token: "large", upload_url: "https://api.kdrive.infomaniak.com/chunk" });
+    if (String(url).includes("/start")) return envelope({ token: "large", upload_url: "https://api.kdrive.infomaniak.com/" });
     if (String(url).includes("/chunk")) {
       assert.ok(init?.body instanceof Uint8Array);
       assert.ok(init.body.length <= BINARY_CHUNK_BYTES);
@@ -123,11 +127,39 @@ for (const kind of ["digest", "short", "long", "chunk"] as const) {
   });
 }
 
+test("upload URL accepts the exact session route and rejects drift or credential-bearing URLs", async () => {
+  const base = "https://1-14-v3-12.upload.kdrive.infomaniak.com";
+  const route = "/3/drive/42/upload/session/test-session/chunk";
+  const valid = uploadHarness({ uploadUrl: base + route });
+  await valid.client.uploadBinary(42, { body: new Response("x").body!, size: 1, fileName: "fixture.bin", directoryId: 7, signal: deadline() });
+  assert.equal(valid.finalized(), 1);
+  for (const uploadUrl of [base + "/app", base + route.replace("42", "43"), base + route.replace("test-session", "other-session"), base + "/?token=SECRET", base + "/#SECRET", "https://user:SECRET@1-14-v3-12.upload.kdrive.infomaniak.com/"]) {
+    const h = uploadHarness({ uploadUrl });
+    await assert.rejects(() => h.client.uploadBinary(42, { body: new Response("x").body!, size: 1, fileName: "fixture.bin", directoryId: 7, signal: deadline() }));
+    assert.equal(h.chunks.length, 0);
+    assert.equal(h.finalized(), 0);
+    assert.equal(h.canceled(), 1);
+  }
+});
+
+test("binary redirect diagnostics redact credentials, paths and queries and do not follow", async () => {
+  const h = uploadHarness({ redirectChunk: "https://user:SECRET@api.infomaniak.com/3/drive/PRIVATE/upload/session/TOKEN/chunk?signature=SECRET" });
+  await assert.rejects(() => h.client.uploadBinary(42, { body: new Response("x").body!, size: 1,
+    fileName: "fixture.bin", directoryId: 7, signal: deadline() }), (error: Error) => {
+    assert.match(error.message, /redirect rejected/);
+    assert.doesNotMatch(error.message, /SECRET|PRIVATE|TOKEN|signature|user:/);
+    return true;
+  });
+  assert.equal(h.finalized(), 0);
+  assert.equal(h.canceled(), 1);
+});
+
 test("provider failures never expose credentials in upload errors", async () => {
   const h = uploadHarness({ failFinish: true });
   await assert.rejects(() => h.client.uploadBinary(42, { body: new Response(new Uint8Array(1)).body!, size: 1,
     fileName: "fixture.bin", directoryId: 7, signal: deadline() }), (error: Error) => {
-    assert.doesNotMatch(error.message, /private source credential/); return true;
+    assert.doesNotMatch(error.message, /private source credential/);
+    assert.match(error.message, /during finalization/); return true;
   });
 });
 
@@ -157,6 +189,73 @@ test("redirects are manual, limited and revalidated without source credentials",
   assert.equal(requests, 4);
   await assert.rejects(() => fetchBinarySource("https://files.oaiusercontent.com/a", hosts, deadline(),
     async () => new Response(null, { status: 302, headers: { location: "https://169.254.169.254/" } }), noDns), /approved public HTTPS/);
+});
+
+test("observed native file host is accepted exactly, not as a wildcard", async () => {
+  for (const host of ["sdmntprsoutheastus3.oaiusercontent.com", "sdmntpreastus2.oaiusercontent.com"]) {
+    assert.equal(validateSourceUrl(`https://${host}/file`, DEFAULT_BINARY_SOURCE_HOSTS).hostname, host);
+    assert.throws(() => validateSourceUrl(`https://evil.${host}/file`, DEFAULT_BINARY_SOURCE_HOSTS));
+    assert.throws(() => validateSourceUrl(`https://${host}.evil.example/file`, DEFAULT_BINARY_SOURCE_HOSTS));
+  }
+  const pngHost = "sdmntprnorthcentralus.oaiusercontent.com";
+  assert.equal(validateSourceUrl(`https://${pngHost}/file?sig=private`, DEFAULT_BINARY_SOURCE_HOSTS).hostname, pngHost);
+  for (const host of [`evil.${pngHost}`, `${pngHost}.evil.example`]) {
+    assert.throws(() => validateSourceUrl(`https://${host}/file`, DEFAULT_BINARY_SOURCE_HOSTS));
+  }
+  const host = "sdmntprcentralus.oaiusercontent.com";
+  assert.equal(validateSourceUrl(`https://${host}/file?sig=private`, DEFAULT_BINARY_SOURCE_HOSTS).hostname, host);
+  for (const other of [`${host}.evil.example`, `evil.${host}`, "unverified.oaiusercontent.com"]) {
+    assert.throws(() => validateSourceUrl(`https://${other}/file?sig=private`, DEFAULT_BINARY_SOURCE_HOSTS));
+  }
+  let fetched = 0;
+  await assert.rejects(() => fetchBinarySource(`https://${host}/file`, DEFAULT_BINARY_SOURCE_HOSTS, deadline(),
+    async () => { fetched++; return new Response("never"); },
+    async () => { throw new Error("private DNS rejected"); }), /private DNS/);
+  assert.equal(fetched, 0);
+});
+
+test("file-adapter failures and host-policy failures are distinct and redact URL data", () => {
+  for (const input of ["/mnt/data/private.png", "sandbox:/mnt/data/private.png", "file_private", "file:///private.png"]) {
+    assert.throws(() => validateSourceUrl(input, DEFAULT_BINARY_SOURCE_HOSTS), (e: Error) => {
+      assert.match(e.message, /not resolved/);
+      assert.doesNotMatch(e.message, /private/);
+      return true;
+    });
+  }
+  assert.throws(() => validateSourceUrl("https://unverified.oaiusercontent.com/private.png?sig=SECRET", DEFAULT_BINARY_SOURCE_HOSTS), (e: Error) => {
+    assert.match(e.message, /OpenAI file host.*allowlist/);
+    assert.doesNotMatch(e.message, /unverified|private.png|SECRET/);
+    return true;
+  });
+});
+
+test("regional rejection exposes hostname only without granting trust", () => {
+  assert.throws(() => validateSourceUrl("https://sdmnt-region.oaiusercontent.com/PRIVATE?sig=SECRET", []), (e: Error) => {
+    assert.match(e.message, /Rejected hostname: sdmnt-region\.oaiusercontent\.com/);
+    assert.doesNotMatch(e.message, /PRIVATE|SECRET|https:/);
+    return true;
+  });
+});
+
+test("non-regional adapter host diagnostics do not fetch or expose signed URL data", async () => {
+  let fetched = false;
+  await assert.rejects(() => fetchBinarySource("https://files.example.com/private/file.png?sig=SECRET", [], deadline(), async () => {
+    fetched = true;
+    return new Response("unused");
+  }), (e: Error) => {
+    assert.doesNotMatch(e.message, /files\.example\.com/);
+    assert.doesNotMatch(e.message, /\/private\/|file\.png|SECRET|https:/);
+    return true;
+  });
+  assert.equal(fetched, false);
+});
+
+test("observed ChatGPT Azure file host is trusted exactly, never as a shared-domain wildcard", () => {
+  const host = "oaisdmntprnorthcentralus.blob.core.windows.net";
+  assert.equal(validateSourceUrl(`https://${host}/file?sig=private`, DEFAULT_BINARY_SOURCE_HOSTS).hostname, host);
+  for (const other of ["anotheraccount.blob.core.windows.net", `evil.${host}`, `${host}.evil.example`, "oaisdmntprnorthcentralus-evil.blob.core.windows.net"]) {
+    assert.throws(() => validateSourceUrl(`https://${other}/file`, DEFAULT_BINARY_SOURCE_HOSTS));
+  }
 });
 
 test("size checks reject missing length, header mismatch, advertised and streamed oversize", async () => {

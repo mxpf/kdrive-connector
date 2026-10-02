@@ -32,6 +32,17 @@ it.each([false, true])("discovers all tools and resources with notification miti
     expect(tools.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
       "kdrive_export_file", "kdrive_upload_file_ref", "kdrive_upload_from_url",
     ]));
+    const upload = tools.tools.find(tool => tool.name === "kdrive_upload_file_ref")!;
+    expect(upload._meta?.["openai/fileParams"]).toEqual(["file_ref"]);
+    expect(upload.inputSchema.required).toContain("file_ref");
+    expect(upload.inputSchema.properties?.file_ref).toMatchObject({
+      type: "object",
+      properties: {
+        download_url: { type: "string" }, file_id: { type: "string" },
+        mime_type: { type: "string" }, file_name: { type: "string" },
+      },
+      required: ["download_url", "file_id"],
+    });
     expect(resources.resources).toHaveLength(2);
     expect(templates.resourceTemplates).toHaveLength(0);
   } finally {

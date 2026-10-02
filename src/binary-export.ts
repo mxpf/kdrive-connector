@@ -84,6 +84,6 @@ export async function serveBinaryExport(request: Request, token: string, config:
     headers.delete("content-disposition");
     headers.delete("etag");
     headers.set("content-type", "text/plain; charset=utf-8");
-    return new Response("This binary reference is invalid, expired, or its pinned version is unavailable.", { status: 410, headers });
+    return new Response("This binary reference is invalid, expired, or its pinned version is unavailable. Call kdrive_export_file for a fresh reference and compare resolved_version before continuing.", { status: 410, headers });
   }
 }
