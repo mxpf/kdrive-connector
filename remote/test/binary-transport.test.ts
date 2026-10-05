@@ -3,8 +3,44 @@ import { createHash } from "node:crypto";
 import { hashBinary, BINARY_CHUNK_BYTES } from "../../src/binary-transport";
 import { createBinaryExport, serveBinaryExport } from "../../src/binary-export";
 import { generateOperationSecret } from "../../src/operation-token";
+import { registerBinaryTools } from "../../src/binary-tools";
+import type { KDriveClient } from "../../src/kdrive-client";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 describe("binary transport in the Worker runtime", () => {
+  it("reuses verified digests within a registration but still resolves every export", async () => {
+    let reads = 0;
+    let resolutions = 0;
+    let version = "v1";
+    const secret = generateOperationSecret();
+    const client = {
+      resolveBinaryVersion: async () => {
+        resolutions++;
+        return { file: { id: 7, name: "file.pdf", type: "file", size: 3 }, versionId: version };
+      },
+      downloadVersionStream: async () => { reads++; return new Response(new Uint8Array([1, 2, 3])); },
+    } as unknown as KDriveClient;
+    const register = () => {
+      let handler!: (input: { path: string }) => Promise<any>;
+      const server = { registerTool(name: string, _options: unknown, fn: typeof handler) { if (name === "kdrive_export_file") handler = fn; } } as unknown as Pick<McpServer, "registerTool">;
+      registerBinaryTools(server, client, { driveId: 42, buildOpenUrl: () => "unused",
+        buildBinaryExport: (file, id, digest) => createBinaryExport(secret, "https://connector.example.com", "owner", 42, file, id, digest) });
+      return () => handler({ path: "/Private/file.pdf" });
+    };
+    const run = register();
+    const first = await run();
+    const second = await run();
+    expect(first.isError).toBeUndefined();
+    expect(second.isError).toBeUndefined();
+    expect(reads).toBe(1);
+    expect(resolutions).toBe(2);
+    expect(second.structuredContent.sha256).toBe(first.structuredContent.sha256);
+    version = "v2";
+    await run();
+    expect(reads).toBe(2);
+    await register()();
+    expect(reads).toBe(3);
+  });
   it("incrementally hashes a 50 MiB lazy stream", async () => {
     const size = 50 * 1024 * 1024;
     let emitted = 0;

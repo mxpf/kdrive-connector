@@ -16,10 +16,12 @@ test("diagnostics distinguish builds, capabilities and effective limits", () => 
   assert.equal(remote.capabilities.binary_export, true);
   assert.equal(remote.limits.binary_bytes, 3);
   assert.equal(remote.capabilities.range_download, false);
+  assert.deepEqual(remote.optimizations.binary_digest_cache, { enabled: true, max_entries: 128, ttl_ms: 600000, scope: "authenticated_registration" });
   assert.ok(remote.capability_revision);
   const local = connectorDiagnostics({ binaryExport: false, maxReadBytes: 1, maxUploadBytes: 2 });
   assert.equal(local.build_id, "unknown-local-build");
   assert.equal(local.capabilities.binary_export, false);
+  assert.equal(local.optimizations.binary_digest_cache.enabled, false);
   assert.equal(local.limits.binary_bytes, 104857600);
 });
 

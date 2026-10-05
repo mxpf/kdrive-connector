@@ -20,7 +20,36 @@ Resolve the exact file ID and capture its current ETag/size, checking metadata a
 
 This is a fail-closed content reference, not retained storage: if the file changes or disappears before redemption, export again. It does not guarantee old bytes remain downloadable for the whole expiry window. Previously issued numeric historical-version links still use the version-specific endpoint and never fall back to current content. Missing ETags, metadata drift, length mismatch or digest mismatch fail closed.
 
-Export is read-only but reads bytes once for hashing and again for handoff; this trades bandwidth for a digest available before downstream download. `GET /binary/:token` streams raw bytes with attachment, MIME, length, digest ETag, no-store and no-referrer headers; `HEAD` returns signed metadata. Range requests are not implemented (a full 200 response is returned). Streaming digest/length errors terminate the response; consumers must reject incomplete downloads and should verify the supplied SHA-256. Already-delivered bytes cannot be recalled.
+On a cold export, bytes are read once for hashing and again for handoff; this trades bandwidth for a digest available before downstream download. Repeat exports in the same warm authenticated registration can reuse the verified digest as described below. `GET /binary/:token` streams raw bytes with attachment, MIME, length, digest ETag, no-store and no-referrer headers; `HEAD` returns signed metadata. Range requests are not implemented (a full 200 response is returned). Streaming digest/length errors terminate the response; consumers must reject incomplete downloads and should verify the supplied SHA-256. Already-delivered bytes cannot be recalled.
+
+### Repeat-export optimization
+
+Each authenticated tool registration owns a bounded in-memory digest cache:
+128 entries, a fixed ten-minute TTL, and least-recently-used eviction. Keys include
+drive ID, file ID, exact version/ETag (including its type), and byte length. Only
+verified SHA-256 and size are stored—not file bytes, paths, credentials, file
+objects, or signed URLs. Restarts/reconnects or separate registrations can cause
+cold misses; there is no cross-account or global shared cache.
+
+Every export still resolves the requested path and checks fresh file metadata and
+access before consulting the cache. A hit uses current name/MIME metadata and
+issues a fresh short-lived reference. Failed or interrupted reads never populate
+the cache. Changed version, size, or replacement file ID causes a miss. Cache hits
+do not extend cache TTL or bypass limits. Concurrent cold exports may each perform
+their own read; this patch does not share cancellable in-flight streams.
+
+Every redemption still downloads bytes and verifies the pinned version, byte
+length, and SHA-256; the cache is not used on that delivery path. Even a provider
+returning different bytes for the same ETag fails the existing digest check.
+First-time transfers are unchanged. An automated 25 MiB fixture proves two exports
+plus one redemption use two full provider reads instead of three (25 MiB avoided);
+this is a byte-count assertion, not a live latency benchmark.
+
+Safe diagnostic events include `digestCacheHit` and `avoidedDownloadBytes`. Health
+reports the cache scope and bounds under `connector.optimizations`. After a future
+deployment, export the same unchanged large file twice in one authenticated
+session, check hit/miss events, and redeem the second reference with full digest
+verification. No uploads or mutations are needed for that smoke test.
 
 The signed link is deliberately usable without the ChatGPT OAuth session by the intended consumer. Anyone possessing it can use it until expiration. Revoking the ChatGPT connection does not individually revoke outstanding five-minute capabilities; changing the signing secret or allowed owner invalidates them. Do not publish links, paste them into tickets, or log their full URLs. Cloudflare/request-log access must be treated as sensitive. Native MCP `resource_link` is returned alongside the URL, but an OpenAI-owned `file_id` cannot be fabricated; actual host materialization and cross-plugin ingestion require live verification.
 

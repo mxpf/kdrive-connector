@@ -5,6 +5,7 @@ import type { KDriveClient, KDriveFile } from "./kdrive-client.js";
 import { splitKDrivePath } from "./kdrive-client.js";
 import { validateName } from "./safety.js";
 import { binaryErrorCode, binaryTrace } from "./binary-diagnostics.js";
+import { BinaryDigestCache } from "./binary-digest-cache.js";
 
 export interface BinaryToolConfig {
   driveId: number;
@@ -30,6 +31,9 @@ export async function uploadedBinaryResult(result: { file: KDriveFile; size_byte
 }
 
 export function registerBinaryTools(server: Pick<McpServer, "registerTool">, client: KDriveClient, config: BinaryToolConfig) {
+  // This closure belongs to one authenticated MCP registration. No global cache:
+  // another account/session must independently read and verify its own digest.
+  const digestCache = new BinaryDigestCache();
   const maxBytes = config.maxBinaryBytes ?? BINARY_MAX_BYTES;
   const expected = {
     expected_size: z.number().int().positive().max(maxBytes).optional(),
@@ -80,11 +84,19 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
       if (!config.buildBinaryExport) throw new BinaryTransferError("Binary export requires the HTTPS remote connector; this stdio server has no public download endpoint.");
       const signal = AbortSignal.timeout(BINARY_TIMEOUT_MS);
       const { file, versionId } = await client.resolveBinaryVersion(config.driveId, path, signal);
-      if (typeof file.size !== "number" || file.size > maxBytes) throw new BinaryTransferError("Binary export exceeds the configured limit.");
-      trace.progress("download");
-      const response = await client.downloadVersionStream(config.driveId, file.id, versionId, signal);
-      const digest = await hashBinary(response.body!, maxBytes, signal);
-      if (digest.size_bytes !== file.size) throw new BinaryTransferError("Pinned version size does not match resolved metadata.");
+      if (typeof file.size !== "number" || !Number.isSafeInteger(file.size) || file.size < 0 || file.size > maxBytes) throw new BinaryTransferError("Binary export exceeds the configured limit or has invalid size metadata.");
+      const identity = { driveId: config.driveId, fileId: file.id, versionId, size: file.size };
+      let digest = digestCache.get(identity);
+      trace.digestCache(Boolean(digest), digest ? file.size : 0);
+      if (!digest) {
+        trace.progress("download");
+        const response = await client.downloadVersionStream(config.driveId, file.id, versionId, signal);
+        digest = await hashBinary(response.body!, maxBytes, signal);
+        if (digest.size_bytes !== file.size) throw new BinaryTransferError("Pinned version size does not match resolved metadata.", "INTEGRITY_MISMATCH");
+        // downloadVersionStream checks the version both before and after reading.
+        // A failed/interrupted read never populates this cache.
+        digestCache.set(identity, digest);
+      }
       trace.progress("reference", digest.size_bytes);
       return { ...await config.buildBinaryExport(file, versionId, { ...digest, trace_id: trace.traceId }) };
     });
