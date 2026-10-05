@@ -39,6 +39,10 @@
     {
       "new_sqlite_classes": ["KDriveOperationNonceStore"],
       "tag": "v2"
+    },
+    {
+      "new_sqlite_classes": ["KDriveBinaryDigestStore"],
+      "tag": "v3"
     }
   ],
   "durable_objects": {
@@ -50,6 +54,10 @@
       {
         "class_name": "KDriveOperationNonceStore",
         "name": "KDRIVE_OPERATION_NONCES"
+      },
+      {
+        "class_name": "KDriveBinaryDigestStore",
+        "name": "KDRIVE_BINARY_DIGESTS"
       }
     ]
   },

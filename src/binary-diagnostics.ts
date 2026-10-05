@@ -19,6 +19,7 @@ export function binaryTrace(operation: string, parentTraceId?: string) {
   return {
     traceId,
     get stage() { return stage; },
+    cacheUnavailable(phase: "read" | "write") { write(false, "kdrive.binary.digest_cache_unavailable", phase === "read" ? "CACHE_READ_FAILED" : "CACHE_WRITE_FAILED"); },
     digestCache(hit: boolean, avoidedBytes: number) {
       digestCacheHit = hit; avoidedDownloadBytes = avoidedBytes;
       write(true, "kdrive.binary.digest_cache");

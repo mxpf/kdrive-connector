@@ -12,6 +12,8 @@ import type { Props } from "./utils";
 import { withoutStandaloneNotifications } from "./mcp-transport";
 import { CONNECTOR_VERSION, connectorDiagnostics } from "../../src/connector-diagnostics.js";
 export { KDriveOperationNonceStore } from "./operation-nonce-store";
+export { KDriveBinaryDigestStore } from "./binary-digest-store";
+import { digestStoreName } from "./binary-digest-store";
 
 function positiveInteger(value: string, name: string): number {
 	const parsed = Number(value);
@@ -58,8 +60,10 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		};
 		const connectorBaseUrl = new URL(this.env.KDRIVE_CONNECTOR_BASE_URL).origin;
 		const subject = this.props.login;
+		const digestStore = this.env.KDRIVE_BINARY_DIGESTS.getByName(digestStoreName(subject, driveId));
 
 		registerKDriveTools(this.server, client, {
+			digestCache: { get: (identity) => digestStore.getDigest(identity), set: (identity, digest) => digestStore.putDigest(identity, digest) },
 			driveId,
 			maxReadBytes,
 			maxUploadBytes,
@@ -81,7 +85,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 				const drive = await client.getDrive(driveId);
 				return {
 					connected: true,
-					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true,
+					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, digestCacheScope: "authenticated_owner_drive",
 						maxReadBytes, maxUploadBytes, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
 					authentication: "OAuth-protected remote connector",
 					drive: {

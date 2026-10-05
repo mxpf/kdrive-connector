@@ -1,5 +1,27 @@
 export const DIGEST_CACHE_TTL_MS = 10 * 60_000;
 export const DIGEST_CACHE_MAX_ENTRIES = 128;
+export const DIGEST_CACHE_OPERATION_TIMEOUT_MS = 1_000;
+
+/** Cache RPC is optional and cannot hold an export open. This bounds the wait,
+ * not the remote operation: a late verified write may still complete safely.
+ */
+export async function withinDigestCacheDeadline<T>(operation: () => T | PromiseLike<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abort = () => {};
+  const deadline = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => reject(new Error("Digest cache deadline exceeded.")), DIGEST_CACHE_OPERATION_TIMEOUT_MS);
+  });
+  try {
+    // Promise.race observes late RPC rejections as well as synchronous failures.
+    return await Promise.race([Promise.resolve().then(operation), deadline]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abort);
+  }
+}
 
 export interface DigestIdentity {
   driveId: number;
@@ -7,7 +29,26 @@ export interface DigestIdentity {
   versionId: number | string;
   size: number;
 }
-type Digest = { size_bytes: number; sha256: string };
+export type Digest = { size_bytes: number; sha256: string };
+export interface BinaryDigestStore {
+  get(identity: DigestIdentity): Digest | undefined | Promise<Digest | undefined>;
+  set(identity: DigestIdentity, digest: Digest): void | Promise<void>;
+}
+
+export function digestIdentityKey(identity: DigestIdentity): string {
+  if (!identity || !Number.isSafeInteger(identity.driveId) || identity.driveId < 1
+    || !Number.isSafeInteger(identity.fileId) || identity.fileId < 1
+    || !Number.isSafeInteger(identity.size) || identity.size < 0
+    || (typeof identity.versionId === "string" ? !identity.versionId.trim() || identity.versionId.length > 1024
+      : !Number.isSafeInteger(identity.versionId) || identity.versionId < 1)) throw new Error("Invalid digest identity.");
+  return JSON.stringify([identity.driveId, identity.fileId, identity.versionId, identity.size]);
+}
+
+export function assertVerifiedDigest(identity: DigestIdentity, digest: Digest): void {
+  digestIdentityKey(identity);
+  if (!digest || digest.size_bytes !== identity.size || typeof digest.sha256 !== "string"
+    || !/^[a-f0-9]{64}$/.test(digest.sha256)) throw new Error("Invalid verified digest.");
+}
 
 /** Owned by one authenticated tool registration, never shared across clients.
  * Stores only verified digests, not bytes, credentials, paths or signed URLs.
@@ -24,7 +65,7 @@ export class BinaryDigestCache {
   }
 
   private key(identity: DigestIdentity): string {
-    return JSON.stringify([identity.driveId, identity.fileId, identity.versionId, identity.size]);
+    return digestIdentityKey(identity);
   }
 
   get(identity: DigestIdentity): Digest | undefined {
@@ -38,8 +79,7 @@ export class BinaryDigestCache {
   }
 
   set(identity: DigestIdentity, digest: Digest): void {
-    if (!Number.isSafeInteger(identity.size) || identity.size < 0 || digest.size_bytes !== identity.size
-      || !/^[a-f0-9]{64}$/.test(digest.sha256)) throw new Error("Invalid verified digest.");
+    assertVerifiedDigest(identity, digest);
     const now = this.now();
     for (const [key, entry] of this.entries) if (now >= entry.expiresAt) this.entries.delete(key);
     const key = this.key(identity);

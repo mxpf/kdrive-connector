@@ -5,9 +5,12 @@ import type { KDriveClient, KDriveFile } from "./kdrive-client.js";
 import { splitKDrivePath } from "./kdrive-client.js";
 import { validateName } from "./safety.js";
 import { binaryErrorCode, binaryTrace } from "./binary-diagnostics.js";
-import { BinaryDigestCache } from "./binary-digest-cache.js";
+import { BinaryDigestCache, assertVerifiedDigest, withinDigestCacheDeadline, type BinaryDigestStore, type Digest } from "./binary-digest-cache.js";
 
 export interface BinaryToolConfig {
+  // Trusted server configuration, never an MCP argument. Remote stores must be
+  // scoped to the authenticated owner and drive before being supplied here.
+  digestCache?: BinaryDigestStore;
   driveId: number;
   maxBinaryBytes?: number;
   binarySourceHosts?: readonly string[];
@@ -31,9 +34,7 @@ export async function uploadedBinaryResult(result: { file: KDriveFile; size_byte
 }
 
 export function registerBinaryTools(server: Pick<McpServer, "registerTool">, client: KDriveClient, config: BinaryToolConfig) {
-  // This closure belongs to one authenticated MCP registration. No global cache:
-  // another account/session must independently read and verify its own digest.
-  const digestCache = new BinaryDigestCache();
+  const digestCache = config.digestCache ?? new BinaryDigestCache();
   const maxBytes = config.maxBinaryBytes ?? BINARY_MAX_BYTES;
   const expected = {
     expected_size: z.number().int().positive().max(maxBytes).optional(),
@@ -86,7 +87,15 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
       const { file, versionId } = await client.resolveBinaryVersion(config.driveId, path, signal);
       if (typeof file.size !== "number" || !Number.isSafeInteger(file.size) || file.size < 0 || file.size > maxBytes) throw new BinaryTransferError("Binary export exceeds the configured limit or has invalid size metadata.");
       const identity = { driveId: config.driveId, fileId: file.id, versionId, size: file.size };
-      let digest = digestCache.get(identity);
+      let digest: Digest | undefined;
+      try {
+        digest = await withinDigestCacheDeadline(() => digestCache.get(identity), signal);
+        if (digest) assertVerifiedDigest(identity, digest);
+      } catch {
+        signal.throwIfAborted();
+        digest = undefined;
+        trace.cacheUnavailable("read");
+      }
       trace.digestCache(Boolean(digest), digest ? file.size : 0);
       if (!digest) {
         trace.progress("download");
@@ -95,8 +104,13 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
         if (digest.size_bytes !== file.size) throw new BinaryTransferError("Pinned version size does not match resolved metadata.", "INTEGRITY_MISMATCH");
         // downloadVersionStream checks the version both before and after reading.
         // A failed/interrupted read never populates this cache.
-        digestCache.set(identity, digest);
+        // Cache storage is optional: failure must not turn a verified export
+        // into an error or cause permission/version checks to be skipped.
+        const verifiedDigest = digest;
+        try { await withinDigestCacheDeadline(() => digestCache.set(identity, verifiedDigest), signal); }
+        catch { signal.throwIfAborted(); trace.cacheUnavailable("write"); }
       }
+      signal.throwIfAborted();
       trace.progress("reference", digest.size_bytes);
       return { ...await config.buildBinaryExport(file, versionId, { ...digest, trace_id: trace.traceId }) };
     });

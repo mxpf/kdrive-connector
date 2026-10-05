@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { BinaryDigestCache } from "../src/binary-digest-cache.js";
+import { BinaryDigestCache, withinDigestCacheDeadline, type BinaryDigestStore } from "../src/binary-digest-cache.js";
 import { registerBinaryTools } from "../src/binary-tools.js";
 import { KDriveClient } from "../src/kdrive-client.js";
 import { loadConfig } from "../src/config.js";
@@ -40,7 +40,7 @@ test("digest cache keys include drive, file ID, version type/value and size", ()
   assert.throws(() => cache.set(identity, { ...digest, sha256: "invalid" }));
 });
 
-function harness(size = 3) {
+function harness(size = 3, digestCache?: BinaryDigestStore) {
   const state = { id: 7, version: "v1", size, name: "document.pdf", mime: "application/pdf",
     denied: false, failRead: false, drift: false, corrupt: false, reads: 0, metadata: 0, transferred: 0 };
   const secret = generateOperationSecret();
@@ -70,13 +70,63 @@ function harness(size = 3) {
   function register(subject = "owner") {
     let handler!: (input: { path: string }) => Promise<any>;
     const server = { registerTool(name: string, _config: unknown, fn: typeof handler) { if (name === "kdrive_export_file") handler = fn; } } as unknown as Pick<McpServer, "registerTool">;
-    registerBinaryTools(server, client, { driveId: 42, buildOpenUrl: () => "unused",
+    registerBinaryTools(server, client, { driveId: 42, buildOpenUrl: () => "unused", digestCache,
       buildBinaryExport: (f, version, d) => createBinaryExport(secret, origin, subject, 42, f, version, d) });
     return () => handler({ path: "/Private/document.pdf" });
   }
   const download = (ref: any) => serveBinaryExport(new Request(ref.download_url), new URL(ref.download_url).pathname.slice(8), { secret, subject: "owner", driveId: 42, client });
   return { state, exportFile: register(), register, download };
 }
+
+for (const failure of ["read", "write", "invalid", "stalled_read", "stalled_write"] as const) test(`cache ${failure} failure falls back to verified bytes and redacts errors`, { timeout: 5000 }, async (t) => {
+  const events: string[] = [];
+  t.mock.method(console, "error", (line: string) => events.push(line));
+  const h = harness(3, {
+    get: async () => {
+      if (failure === "stalled_read") return new Promise(() => {});
+      if (failure === "read") throw new Error("secret-cache-credential");
+      return failure === "invalid" ? { size_bytes: 3, sha256: "invalid" } : undefined;
+    },
+    set: async () => {
+      if (failure === "stalled_write") return new Promise(() => {});
+      if (failure === "write") throw new Error("secret-cache-credential");
+    },
+  });
+  assert.equal((await h.exportFile()).isError, undefined);
+  assert.equal(h.state.reads, 1);
+  assert.ok(events.some(line => line.includes("digest_cache_unavailable")));
+  assert.ok(events.every(line => !line.includes("secret-cache-credential")));
+  h.state.denied = true;
+  assert.equal((await h.exportFile()).isError, true);
+  assert.equal(h.state.reads, 1);
+});
+
+for (const phase of ["read", "write"] as const) test(`overall export deadline interrupts stalled cache ${phase}`, { timeout: 2000 }, async t => {
+  const controller = new AbortController();
+  t.mock.method(AbortSignal, "timeout", () => controller.signal);
+  const stall = () => {
+    queueMicrotask(() => controller.abort(new DOMException("Timed out", "TimeoutError")));
+    return new Promise<never>(() => {});
+  };
+  const h = harness(3, { get: () => phase === "read" ? stall() : undefined, set: () => stall() });
+  const result = await h.exportFile();
+  assert.equal(result.isError, true);
+  assert.equal(JSON.parse(result.content[0].text).error_code, "TRANSFER_TIMEOUT");
+  assert.equal(h.state.reads, phase === "read" ? 0 : 1);
+});
+
+test("cache deadline observes late rejection and skips work if already aborted", async () => {
+  const controller = new AbortController();
+  let rejectLate!: (error: Error) => void;
+  const result = withinDigestCacheDeadline(() => new Promise((_resolve, reject) => { rejectLate = reject; }), controller.signal);
+  await Promise.resolve();
+  controller.abort();
+  await assert.rejects(result);
+  rejectLate(new Error("late cache failure"));
+  let invoked = false;
+  await assert.rejects(withinDigestCacheDeadline(() => { invoked = true; }, controller.signal));
+  assert.equal(invoked, false);
+});
 
 test("25 MiB warm export avoids one full provider read; delivery still reads and verifies bytes", async (t) => {
   const events: any[] = [];

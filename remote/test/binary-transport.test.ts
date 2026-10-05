@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { env, evictDurableObject } from "cloudflare:test";
 import { createHash } from "node:crypto";
 import { hashBinary, BINARY_CHUNK_BYTES } from "../../src/binary-transport";
 import { createBinaryExport, serveBinaryExport } from "../../src/binary-export";
@@ -8,6 +9,41 @@ import type { KDriveClient } from "../../src/kdrive-client";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 describe("binary transport in the Worker runtime", () => {
+  it("shares the durable digest across registrations without skipping fresh authorization", async () => {
+    const store = env.KDRIVE_BINARY_DIGESTS.getByName(crypto.randomUUID());
+    let reads = 0;
+    let resolutions = 0;
+    let denied = false;
+    const secret = generateOperationSecret();
+    const client = {
+      resolveBinaryVersion: async () => {
+        resolutions++;
+        if (denied) throw new Error("Access denied");
+        return { file: { id: 7, name: "file.pdf", type: "file", size: 3 }, versionId: "v1" };
+      },
+      downloadVersionStream: async () => { reads++; return new Response(new Uint8Array([1, 2, 3])); },
+    } as unknown as KDriveClient;
+    const runInNewRegistration = () => {
+      let handler!: (input: { path: string }) => Promise<any>;
+      const server = { registerTool(name: string, _options: unknown, fn: typeof handler) { if (name === "kdrive_export_file") handler = fn; } } as unknown as Pick<McpServer, "registerTool">;
+      registerBinaryTools(server, client, { driveId: 42, buildOpenUrl: () => "unused",
+        digestCache: { get: id => store.getDigest(id), set: (id, digest) => store.putDigest(id, digest) },
+        buildBinaryExport: (file, id, digest) => createBinaryExport(secret, "https://connector.example.com", "owner", 42, file, id, digest) });
+      return handler({ path: "/Private/file.pdf" });
+    };
+    const first = await runInNewRegistration();
+    await evictDurableObject(store);
+    const second = await runInNewRegistration();
+    expect(first.isError).toBeUndefined();
+    expect(second.isError).toBeUndefined();
+    expect(second.structuredContent.sha256).toBe(first.structuredContent.sha256);
+    expect(reads).toBe(1);
+    expect(resolutions).toBe(2);
+    denied = true;
+    expect((await runInNewRegistration()).isError).toBe(true);
+    expect(reads).toBe(1);
+    expect(resolutions).toBe(3);
+  });
   it("reuses verified digests within a registration but still resolves every export", async () => {
     let reads = 0;
     let resolutions = 0;

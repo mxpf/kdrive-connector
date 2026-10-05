@@ -247,10 +247,12 @@ For files larger than the inline read limit, use **`kdrive_export_file`**, not `
 
 See [binary transport implementation and acceptance plan](docs/binary-transport.md) for security boundaries, configuration, limits, and automated versus live acceptance coverage.
 
-Repeated exports of an unchanged binary within the same warm authenticated session
-reuse a verified digest for up to ten minutes, avoiding a redundant full-file hash
-download. Each export still checks current access and version; each download still
-verifies the version, length, and SHA-256. First-time exports are unchanged.
+Repeated exports of an unchanged binary can reuse a verified digest for up to ten
+minutes, avoiding a redundant full-file hash download. The remote cache is isolated
+by authenticated owner and drive and survives MCP session changes and Worker
+restarts; local stdio uses a per-registration in-memory cache. Each export still
+checks current access and version; each download still verifies the version,
+length, and SHA-256. First-time exports are unchanged.
 
 ## Development checks
 
