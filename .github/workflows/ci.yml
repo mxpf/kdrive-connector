@@ -45,3 +45,7 @@ jobs:
       - name: Type-check remote server
         run: npm run type-check
         working-directory: remote
+
+      - name: Test remote server
+        run: npm test
+        working-directory: remote

@@ -1,4 +1,5 @@
 import { materializeBinaryReference } from "./binary-materialize.js";
+import { BinaryDownloadError } from "./download-diagnostics.js";
 
 // Receive private reference JSON over stdin, never as a shell argument or log.
 try {
@@ -14,7 +15,7 @@ try {
     origin: process.env.KDRIVE_CONNECTOR_BASE_URL ?? "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
   });
   process.stdout.write(JSON.stringify(result) + "\n");
-} catch {
-  process.stderr.write("Binary reference download failed. Refresh an expired reference with kdrive_export_file; verify the version before retrying. No signed URL or credentials are logged.\n");
+} catch (error) {
+  process.stderr.write((error instanceof BinaryDownloadError ? error.message : "Binary reference download failed. Check the reference and local destination. No signed URL or credentials are logged.") + "\n");
   process.exitCode = 1;
 }

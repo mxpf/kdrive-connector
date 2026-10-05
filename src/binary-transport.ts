@@ -1,19 +1,35 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import { resolve4, resolve6 } from "node:dns/promises";
+import { AuthenticationError, KDriveApiError } from "./errors.js";
 
 export const BINARY_CHUNK_BYTES = 4 * 1024 * 1024;
 export const BINARY_MAX_BYTES = 100 * 1024 * 1024;
 export const BINARY_TIMEOUT_MS = 120_000;
 export const EXPORT_TTL_MS = 5 * 60_000;
 
-export class BinaryTransferError extends Error {}
+export type BinaryErrorCode = "BINARY_TRANSFER_FAILED" | "SOURCE_HOST_DENIED" | "FILE_REFERENCE_UNRESOLVED" | "TRANSFER_TIMEOUT" | "INTEGRITY_MISMATCH" | "VERSION_CHANGED" | "UPLOAD_COMMIT_UNKNOWN" | "UPSTREAM_AUTHENTICATION_FAILED" | "UPSTREAM_ACCESS_DENIED" | "UPSTREAM_RATE_LIMITED" | "UPSTREAM_UNAVAILABLE";
+export class BinaryTransferError extends Error {
+  constructor(message: string, readonly code: BinaryErrorCode = "BINARY_TRANSFER_FAILED") { super(message); }
+}
+
+export function classifyBinaryFailure(error: unknown): BinaryErrorCode {
+  if (error instanceof BinaryTransferError) return error.code;
+  if (error instanceof AuthenticationError) return "UPSTREAM_AUTHENTICATION_FAILED";
+  if (error instanceof KDriveApiError) {
+    if (error.status === 401) return "UPSTREAM_AUTHENTICATION_FAILED";
+    if (error.status === 403) return "UPSTREAM_ACCESS_DENIED";
+    if (error.status === 429) return "UPSTREAM_RATE_LIMITED";
+  }
+  if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) return "TRANSFER_TIMEOUT";
+  return "UPSTREAM_UNAVAILABLE";
+}
 
 async function withinDeadline<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
   let abort: () => void = () => {};
   const canceled = new Promise<never>((_resolve, reject) => {
-    abort = () => reject(new BinaryTransferError("Binary transfer timed out."));
+    abort = () => reject(new BinaryTransferError("Binary transfer timed out.", "TRANSFER_TIMEOUT"));
     signal.addEventListener("abort", abort, { once: true });
   });
   try { return await Promise.race([promise, canceled]); }
@@ -67,7 +83,7 @@ export async function assertPublicDns(host: string, resolvers: {
 // arbitrary user-supplied domains: a DNS preflight alone is vulnerable to rebinding.
 export function validateSourceUrl(value: string, trustedHosts: readonly string[]): URL {
   if (/^(?:\/|sandbox:|file:|file[_-])/i.test(value)) {
-    throw new BinaryTransferError("File reference was not resolved to an HTTPS download URL. Select the conversation file through the host file-parameter adapter; do not retry with a local path, sandbox URI, or bare file ID.");
+    throw new BinaryTransferError("File reference was not resolved to an HTTPS download URL. Select the conversation file through the host file-parameter adapter; do not retry with a local path, sandbox URI, or bare file ID.", "FILE_REFERENCE_UNRESOLVED");
   }
   let url: URL;
   try { url = new URL(value); } catch { throw new BinaryTransferError("Invalid binary source URL."); }
@@ -76,7 +92,7 @@ export function validateSourceUrl(value: string, trustedHosts: readonly string[]
     || host.startsWith("[") || isIP(host) || !host.includes(".") || host.endsWith(".")
     || /(?:^|\.)(?:localhost|local|internal|localdomain|test|invalid)$/.test(host)
     || host === "metadata.google.internal") {
-    throw new BinaryTransferError("Binary source is not an approved public HTTPS host. Use a host-issued file reference or ask the administrator to approve its exact trusted download host.");
+    throw new BinaryTransferError("Binary source is not an approved public HTTPS host. Use a host-issued file reference or ask the administrator to approve its exact trusted download host.", "SOURCE_HOST_DENIED");
   }
   if (!trustedHosts.includes(host)) {
     // No URL path, query, credentials, or user-supplied file ID in diagnostics.
@@ -84,7 +100,7 @@ export function validateSourceUrl(value: string, trustedHosts: readonly string[]
     // This is diagnostic evidence, not automatic permission to fetch it.
     const diagnosticHost = /^sdmnt[a-z0-9-]{1,48}\.oaiusercontent\.com$/.test(host) ? ` Rejected hostname: ${host}.` : "";
     const provider = host.endsWith(".oaiusercontent.com") ? "OpenAI file host" : "source host";
-    throw new BinaryTransferError(`Binary ${provider} is not on the exact trusted-host allowlist.${diagnosticHost} The file adapter supplied an HTTPS URL, but source policy rejected it. Ask the administrator to verify its hostname privately; do not construct another URL or retry with a local path.`);
+    throw new BinaryTransferError(`Binary ${provider} is not on the exact trusted-host allowlist.${diagnosticHost} The file adapter supplied an HTTPS URL, but source policy rejected it. Ask the administrator to verify its hostname privately; do not construct another URL or retry with a local path.`, "SOURCE_HOST_DENIED");
   }
   return url;
 }
@@ -103,7 +119,7 @@ export async function fetchBinarySource(
       response = await fetcher(url.href, {
         redirect: "manual", signal, headers: { accept: "application/octet-stream", "accept-encoding": "identity" },
       });
-    } catch { throw new BinaryTransferError("Binary source request failed or timed out."); }
+    } catch (error) { throw new BinaryTransferError("Binary source request failed or timed out.", signal.aborted ? "TRANSFER_TIMEOUT" : classifyBinaryFailure(error)); }
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       await response.body?.cancel();
       const location = response.headers.get("location");
@@ -113,7 +129,7 @@ export async function fetchBinarySource(
     }
     if (response.status !== 200 || !response.body || (response.headers.get("content-encoding") ?? "identity") !== "identity") {
       await response.body?.cancel();
-      throw new BinaryTransferError("Binary source must return an uncompressed complete HTTP 200 file.");
+      throw new BinaryTransferError("Binary source must return an uncompressed complete HTTP 200 file.", response.status !== 200 ? classifyBinaryFailure(new KDriveApiError("Source request failed", response.status)) : "BINARY_TRANSFER_FAILED");
     }
     return response;
   }

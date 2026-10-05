@@ -91,3 +91,45 @@ After `npm run build`, feed raw reference JSON to `node dist/download-cli.js` th
 The endpoint returns HTTP 410 for invalid/expired/unavailable references. Refresh with `kdrive_export_file` and compare `resolved_version` before resuming a task. It currently advertises `Accept-Ranges: none`; range/chunk retrieval and server-side OCR are intentionally deferred, not silently approximated. Full-stream integrity checks remain in place. OCR/extraction belongs to a downstream PDF tool in this patch.
 
 Transport integration tests exercise lazy 25 MiB PDF-shaped data, image/EPUB/Office/archive payloads, Unicode/space-containing names, expiry/refresh, corruption, truncation and cancellation. These are byte-transport fixtures, not document-format validation. Live evidence uses the actual 27002376-byte *Wisdom of Laotse* PDF, which downloads with the correct digest and opens/renders in Poppler. Acrobat's generic processing error remains unresolved.
+# Reliability diagnostics
+
+`kdrive_connection_status` includes an additive `connector` object: package version,
+running Worker deployment ID (`build_id`), capability revision, supported transports,
+and effective byte/time limits. Stdio reports `unknown-local-build` and no remote
+export capability. A deployment ID does not prove that ChatGPT has refreshed its
+cached tool catalog; compare actual tool availability separately. The package
+version remains 0.3.1; this patch is not a release/version bump.
+
+Binary tool results include `trace_id`. Safe operational events record the operation,
+stage, elapsed milliseconds, bytes, and stable error code—not filenames, paths,
+file contents, source URLs, signed references, or credentials. New signed exports
+carry the export trace ID so the download's `parentTraceId` can correlate the two;
+older references without that field remain supported. Download responses include
+`X-KDrive-Trace-Id`. Once streaming has started, failures terminate the stream and
+are recorded in logs; HTTP status cannot be changed after headers have been sent.
+
+Pre-stream failures distinguish invalid/expired references (410), changed pinned
+versions (409), upstream failure (502), and timeout (504), with
+`X-KDrive-Error-Code`. Upstream rate limiting uses 429. Authentication and access
+failures retain 502 with distinct `UPSTREAM_AUTHENTICATION_FAILED` and
+`UPSTREAM_ACCESS_DENIED` codes (not a client OAuth challenge). A missing pinned
+file during either metadata check is treated as a version-unavailable failure.
+Unknown upstream errors are never echoed. An unconfirmed
+upload finalization reports `UPLOAD_COMMIT_UNKNOWN`: inspect the destination before
+retrying. A confirmed upload with failed optional Open-in-kDrive link generation
+still returns `status: uploaded` and `warning_code: OPEN_URL_UNAVAILABLE`.
+
+Source fetches and upload-session/chunk requests preserve the same authentication,
+access, rate-limit, and timeout categories. Once upload finalization has started,
+`UPLOAD_COMMIT_UNKNOWN` takes precedence: do not automatically retry a write.
+
+Operational logs use stderr, leaving stdout reserved for the stdio MCP protocol.
+The local download bridge and CLI preserve allowlisted error codes and UUID trace
+IDs, including traces on interrupted downloads, but never echo upstream bodies,
+arbitrary headers, or signed URLs. Failed downloads still remove their private
+partial files before returning an error.
+
+CI runs both Node and Worker suites. These local checks do not establish live
+ChatGPT file-adapter or downstream Adobe compatibility. After deployment, verify
+the health build ID, a read-only export/download trace, and the refreshed tool
+catalog. Do not perform live mutation QA without explicit approval.

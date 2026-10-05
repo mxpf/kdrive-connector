@@ -8,6 +8,7 @@ import { registerKDriveTools } from "./kdrive-tools.js";
 import { generateOperationSecret, MemoryOperationNonceStore } from "./operation-token.js";
 import { logOperationalError, operationalErrorFields } from "./operational-logging.js";
 import { FileTokenStore, readAccessTokenFromKeychain, TokenProvider } from "./token-store.js";
+import { CONNECTOR_VERSION, connectorDiagnostics } from "./connector-diagnostics.js";
 
 const config = loadConfig();
 const tokenStore = new FileTokenStore(config.tokenFile);
@@ -23,7 +24,7 @@ const tokenProvider = new TokenProvider({
 const client = new KDriveClient(config, tokenProvider);
 const driveId = requireDriveId(config);
 const server = new McpServer(
-  { name: "kdrive-connector", version: "0.3.1" },
+  { name: "kdrive-connector", version: CONNECTOR_VERSION },
   { instructions: KDRIVE_SERVER_INSTRUCTIONS },
 );
 
@@ -41,6 +42,7 @@ registerKDriveTools(server, client, {
     const drive = await client.getDrive(driveId);
     return {
       connected: true,
+      connector: connectorDiagnostics({ binaryExport: false, maxReadBytes: config.maxReadBytes, maxUploadBytes: config.maxUploadBytes }),
       authentication,
       drive: {
         name: drive.name,

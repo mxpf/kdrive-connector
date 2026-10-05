@@ -6,6 +6,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kdrive-connector-mcp",
   "main": "src/index.ts",
+  "version_metadata": { "binding": "KDRIVE_WORKER_VERSION" },
   "assets": {
     "directory": "./public"
   },

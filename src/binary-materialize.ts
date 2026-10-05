@@ -6,12 +6,12 @@ import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { BINARY_MAX_BYTES, BINARY_TIMEOUT_MS, type BinaryExportReference } from "./binary-transport.js";
+import { BinaryDownloadError, downloadResponseError } from "./download-diagnostics.js";
 
 /** Local host bridge: never returns a path until all bytes and the digest verify. */
 export async function materializeBinaryReference(ref: BinaryExportReference, options: {
   origin: string; directory?: string; signal?: AbortSignal; fetcher?: typeof fetch;
 }) {
-  const refresh = "Binary reference expired or unavailable; call kdrive_export_file again and verify the returned version before retrying.";
   let url: URL;
   try { url = new URL(ref.download_url); } catch { throw new Error("Invalid binary reference."); }
   if (url.protocol !== "https:" || url.origin !== new URL(options.origin).origin || url.username || url.password
@@ -21,14 +21,20 @@ export async function materializeBinaryReference(ref: BinaryExportReference, opt
     || !ref.file_name || ref.file_name === "." || ref.file_name === ".." || /[/\\\x00-\x1f]/.test(ref.file_name)) {
     throw new Error("Invalid binary reference.");
   }
-  if (!Number.isFinite(Date.parse(ref.expires_at)) || Date.parse(ref.expires_at) <= Date.now()) throw new Error(refresh);
+  if (!Number.isFinite(Date.parse(ref.expires_at)) || Date.parse(ref.expires_at) <= Date.now()) throw new BinaryDownloadError("REFERENCE_INVALID_OR_EXPIRED");
   const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(BINARY_TIMEOUT_MS)]) : AbortSignal.timeout(BINARY_TIMEOUT_MS);
   const directory = await mkdtemp(join(options.directory ?? tmpdir(), "kdrive-download-"));
   const partial = join(directory, ".partial");
   const target = join(directory, ref.file_name);
+  let traceId: string | null = null;
   try {
     const response = await (options.fetcher ?? fetch)(url, { redirect: "error", signal, headers: { "accept-encoding": "identity" } });
-    if (response.status === 410) { await response.body?.cancel(); throw new Error(refresh); }
+    traceId = response.headers.get("x-kdrive-trace-id");
+    if (response.status !== 200) {
+      const error = downloadResponseError(response);
+      await response.body?.cancel().catch(() => undefined);
+      throw error;
+    }
     if (response.status !== 200 || !response.body || (response.headers.get("content-encoding") ?? "identity") !== "identity") {
       await response.body?.cancel(); throw new Error("Invalid response");
     }
@@ -50,6 +56,7 @@ export async function materializeBinaryReference(ref: BinaryExportReference, opt
   } catch (error) {
     // This directory was created exclusively by this invocation; never remove caller paths.
     await rm(directory, { recursive: true, force: true });
-    throw new Error(error instanceof Error && error.message === refresh ? refresh : "Binary download failed, was interrupted, or did not match its size/SHA-256; no completed local file was published.");
+    if (error instanceof BinaryDownloadError) throw error;
+    throw new BinaryDownloadError("DOWNLOAD_FAILED", traceId);
   }
 }

@@ -44,6 +44,7 @@ export interface OpenTokenPayload {
 }
 
 export interface ExportTokenPayload {
+  traceId?: string;
   v: 1;
   type: "export";
   driveId: number;
@@ -266,6 +267,7 @@ export function assertOpenPayload(payload: KDriveSignedPayload): asserts payload
 
 export function assertExportPayload(payload: KDriveSignedPayload): asserts payload is ExportTokenPayload {
   if (payload.type !== "export") throw new Error("Invalid binary export link.");
+  if (payload.traceId !== undefined && !/^[0-9a-f-]{36}$/.test(payload.traceId)) throw new Error("Invalid trace ID.");
   assertSafePositiveInteger(payload.fileId, "file ID");
   if (typeof payload.versionId === "string") {
     if (!payload.versionId.trim() || payload.versionId.length > 1024) throw new Error("Invalid export ETag.");

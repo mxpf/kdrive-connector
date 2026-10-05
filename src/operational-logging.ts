@@ -40,7 +40,8 @@ export function operationalErrorCode(value: unknown): string | undefined {
 }
 
 export function logOperationalInfo(entry: OperationalLogEntry): void {
-  console.info(JSON.stringify(entry));
+  // stdout is exclusively the MCP protocol channel for the stdio server.
+  console.error(JSON.stringify(entry));
 }
 
 export function logOperationalError(entry: OperationalLogEntry): void {

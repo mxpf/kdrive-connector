@@ -159,7 +159,8 @@ test("provider failures never expose credentials in upload errors", async () => 
   await assert.rejects(() => h.client.uploadBinary(42, { body: new Response(new Uint8Array(1)).body!, size: 1,
     fileName: "fixture.bin", directoryId: 7, signal: deadline() }), (error: Error) => {
     assert.doesNotMatch(error.message, /private source credential/);
-    assert.match(error.message, /during finalization/); return true;
+    assert.match(error.message, /finalization may have started/);
+    assert.equal((error as { code?: string }).code, "UPLOAD_COMMIT_UNKNOWN"); return true;
   });
 });
 
@@ -351,7 +352,7 @@ test("current ETag exports reject drift before and during streaming", async () =
     const response = await serveBinaryExport(new Request(ref.download_url), ref.download_url.split("/binary/")[1], {
       client, secret, subject: "owner", driveId: 42,
     });
-    if (phase === "before") { assert.equal(response.status, 410); assert.equal(downloads, 0); }
+    if (phase === "before") { assert.equal(response.status, 409); assert.equal(response.headers.get("x-kdrive-error-code"), "VERSION_CHANGED"); assert.equal(downloads, 0); }
     else { await assert.rejects(() => response.arrayBuffer(), /integrity/); assert.equal(downloads, 1); }
   }
 });
@@ -375,14 +376,15 @@ test("download stream errors rather than silently returning changed bytes", asyn
   await assert.rejects(() => response.body!.getReader().read(), /integrity/);
 });
 
-test("unavailable version returns a well-formed error, not stale binary headers", async () => {
+test("upstream failure returns a well-formed 502, not an expired reference or stale binary headers", async () => {
   const secret = generateOperationSecret();
   const ref = await createBinaryExport(secret, "https://connector.example.com", "owner", 42,
     { id: 1, name: "file.bin", type: "file" }, 2, { size_bytes: 1, sha256: sha(new Uint8Array([1])) });
   const response = await serveBinaryExport(new Request(ref.download_url), ref.download_url.split("/binary/")[1], {
     secret, subject: "owner", driveId: 42, client: { downloadVersionStream: async () => { throw new Error("private token"); } },
   });
-  assert.equal(response.status, 410);
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get("x-kdrive-error-code"), "UPSTREAM_UNAVAILABLE");
   assert.equal(response.headers.get("content-length"), null);
   assert.match(response.headers.get("content-type")!, /text\/plain/);
   assert.doesNotMatch(await response.text(), /private token/);

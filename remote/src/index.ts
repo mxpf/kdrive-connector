@@ -10,6 +10,7 @@ import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
 import type { Props } from "./utils";
 import { withoutStandaloneNotifications } from "./mcp-transport";
+import { CONNECTOR_VERSION, connectorDiagnostics } from "../../src/connector-diagnostics.js";
 export { KDriveOperationNonceStore } from "./operation-nonce-store";
 
 function positiveInteger(value: string, name: string): number {
@@ -22,7 +23,7 @@ function positiveInteger(value: string, name: string): number {
 
 export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 	server = new McpServer(
-		{ name: "kdrive-connector", version: "0.3.1" },
+		{ name: "kdrive-connector", version: CONNECTOR_VERSION },
 		{ instructions: KDRIVE_SERVER_INSTRUCTIONS },
 	);
 
@@ -80,6 +81,8 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 				const drive = await client.getDrive(driveId);
 				return {
 					connected: true,
+					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true,
+						maxReadBytes, maxUploadBytes, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
 					authentication: "OAuth-protected remote connector",
 					drive: {
 						name: drive.name,

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { BINARY_CHUNK_BYTES, BinaryTransferError, binaryChunks, fetchBinarySource } from "./binary-transport.js";
+import { BINARY_CHUNK_BYTES, BinaryTransferError, binaryChunks, fetchBinarySource, classifyBinaryFailure } from "./binary-transport.js";
 import type { AppConfig } from "./config.js";
 import { KDriveApiError } from "./errors.js";
 import {
@@ -396,30 +396,38 @@ export class KDriveClient {
     const after = await this.getFile(driveId, before.id, signal);
     if (typeof before.size !== "number" || !Number.isSafeInteger(before.size) || before.size < 0
       || before.etag !== after.etag || before.size !== after.size) {
-      throw new BinaryTransferError("Current file metadata changed or has no valid size. Retry after the file stops changing.");
+      throw new BinaryTransferError("Current file metadata changed or has no valid size. Retry after the file stops changing.", "VERSION_CHANGED");
     }
     return { file: before, versionId: before.etag };
   }
 
   async downloadVersionStream(driveId: number, fileId: number, versionId: number | string, signal: AbortSignal): Promise<Response> {
+    const pinnedMetadata = async () => {
+      try { return await this.getFile(driveId, fileId, signal); }
+      catch (error) {
+        if (error instanceof KDriveApiError && [404, 410].includes(error.status)) {
+          throw new BinaryTransferError("The pinned file is no longer available. Export it again.", "VERSION_CHANGED");
+        }
+        throw error;
+      }
+    };
     // Numeric IDs remain supported for already issued historical-version links.
     if (typeof versionId === "string") {
-      const before = await this.getFile(driveId, fileId, signal);
+      const before = await pinnedMetadata();
       if (!versionId || before.etag !== versionId || before.type === "dir") {
-        throw new BinaryTransferError("The exported file version has changed or is unavailable. Export it again.");
+        throw new BinaryTransferError("The exported file version has changed or is unavailable. Export it again.", "VERSION_CHANGED");
       }
       const upstream = await this.fetchBinaryDownload(`/2/drive/${driveId}/files/${fileId}/download`, signal);
       const reader = upstream.body!.getReader();
-      const client = this;
       return new Response(new ReadableStream<Uint8Array>({
         async pull(controller) {
           try {
             signal.throwIfAborted();
             const next = await reader.read();
             if (!next.done) { controller.enqueue(next.value); return; }
-            const after = await client.getFile(driveId, fileId, signal);
+            const after = await pinnedMetadata();
             if (after.etag !== versionId || after.size !== before.size) {
-              throw new BinaryTransferError("The exported file version changed during download.");
+              throw new BinaryTransferError("The exported file version changed during download.", "VERSION_CHANGED");
             }
             reader.releaseLock(); controller.close();
           } catch (error) { await reader.cancel().catch(() => undefined); controller.error(error); }
@@ -446,7 +454,8 @@ export class KDriveClient {
     }
     if (response.status !== 200 || !response.body) {
       await response.body?.cancel();
-      throw new BinaryTransferError("The pinned kDrive version is unavailable.");
+      if (response.status === 404 || response.status === 410) throw new BinaryTransferError("The pinned kDrive version is unavailable.", "VERSION_CHANGED");
+      throw new KDriveApiError("Binary download upstream unavailable.", response.status);
     }
     return response;
   }
@@ -455,12 +464,14 @@ export class KDriveClient {
   async uploadBinary(driveId: number, input: {
     body: ReadableStream<Uint8Array>; size: number; fileName: string; directoryId: number;
     expectedSha256?: string; signal: AbortSignal;
+    onProgress?: (stage: import("./binary-diagnostics.js").BinaryStage, bytes?: number) => void;
   }): Promise<{ file: KDriveFile; size_bytes: number; sha256: string }> {
     let session: { token: string; upload_url: string } | undefined;
     let finished = false;
     let finalizationStarted = false;
     let stage = "session start";
     try {
+      input.onProgress?.("session_start", 0);
       // workerd rejects redirect:error. Manual never follows redirects;
       // rawRequest rejects every non-2xx response, including all 3xx statuses.
       const started = await this.jsonRequest<{ token: string; upload_url: string }>(`/3/drive/${driveId}/upload/session/start`, {
@@ -488,6 +499,7 @@ export class KDriveClient {
       uploadUrl.pathname = chunkPath;
       const hash = createHash("sha256");
       stage = "source read";
+      input.onProgress?.("source_read", 0);
       let chunkNumber = 0;
       let size = 0;
       for await (const chunk of binaryChunks(input.body, input.size, input.signal)) {
@@ -496,21 +508,24 @@ export class KDriveClient {
         const digest = createHash("sha256").update(chunk).digest("hex");
         chunkNumber++;
         stage = "chunk upload";
+        input.onProgress?.("chunk_upload", size);
         const appended = await this.jsonRequest<{ status: string }>(uploadUrl.href, {
           method: "POST", body: chunk, signal: input.signal, redirect: "manual", retry401: false,
           query: { chunk_number: chunkNumber, chunk_size: chunk.byteLength, chunk_hash: `sha256:${digest}` },
         });
         if (appended.data?.status !== "ok") throw new BinaryTransferError("kDrive rejected a binary upload chunk.");
         stage = "source read";
+        input.onProgress?.("source_read", size);
       }
       const digest = hash.digest("hex");
       if (size !== input.size || (input.expectedSha256 && digest !== input.expectedSha256.toLowerCase())) {
-        throw new BinaryTransferError("Binary integrity check failed; the upload was not finalized.");
+        throw new BinaryTransferError("Binary integrity check failed; the upload was not finalized.", "INTEGRITY_MISMATCH");
       }
       // Each chunk is independently verified by the provider. Avoid assuming a
       // text-vs-raw encoding for the optional aggregate hash of chunk hashes.
       finalizationStarted = true;
       stage = "finalization";
+      input.onProgress?.("finalization", size);
       const result = await this.jsonRequest<{ result: boolean; file: KDriveFile }>(`/3/drive/${driveId}/upload/session/${session.token}/finish`, {
         method: "POST", json: {}, query: { with: "path" }, signal: input.signal, redirect: "manual", retry401: false,
       });
@@ -519,12 +534,13 @@ export class KDriveClient {
       if (result.data.file.size !== size) throw new BinaryTransferError("kDrive returned an unexpected completed file size. Check the destination before retrying.");
       return { file: result.data.file, size_bytes: size, sha256: digest };
     } catch (error) {
+      if (finalizationStarted) throw new BinaryTransferError("Binary upload completion could not be verified. Check the destination before retrying; finalization may have started.", "UPLOAD_COMMIT_UNKNOWN");
       if (error instanceof BinaryTransferError) throw error;
       // Provider errors may echo signed URLs or credentials; never return them.
       const status = error instanceof KDriveApiError && Number.isInteger(error.status) && error.status >= 100 && error.status <= 599
         ? ` (HTTP ${error.status})` : "";
       const category = input.signal.aborted ? " Transfer deadline expired." : error instanceof TypeError ? " Request or response type error." : error instanceof SyntaxError ? " Invalid JSON response." : "";
-      throw new BinaryTransferError(`Binary upload failed during ${stage}${status}.${category} ${finalizationStarted ? "Check the destination before retrying; finalization may have started." : "Finalization was not started."}`);
+      throw new BinaryTransferError(`Binary upload failed during ${stage}${status}.${category} Finalization was not started.`, input.signal.aborted ? "TRANSFER_TIMEOUT" : classifyBinaryFailure(error));
     } finally {
       await input.body.cancel().catch(() => undefined);
       if (session && !finished && !finalizationStarted && /^[a-zA-Z0-9_-]{1,128}$/.test(session.token)) {

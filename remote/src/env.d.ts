@@ -1,4 +1,5 @@
 interface Env {
+	KDRIVE_WORKER_VERSION?: { id: string; tag: string; timestamp: string };
 	OAUTH_PROVIDER: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
 	GITHUB_CLIENT_ID: string;
 	GITHUB_CLIENT_SECRET: string;
