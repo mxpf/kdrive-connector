@@ -69,7 +69,23 @@ that is consistent with per-registration cache loss, although those session
 events were not individually correlated to export trace IDs. Worker tests now
 cover shared digests across registrations and actual Durable Object eviction,
 owner/drive isolation, absolute expiry, LRU bounds, and fresh authorization.
-Live cross-session improvement still requires deployment and the smoke test above.
+Live verification on 2026-10-05 passed after deploying commit `e0fe1f4` as Worker
+`f8cd0637-8d56-427f-ae66-0ce9c55a762f` (capability revision `2026-10-05.3`):
+
+- The 27,002,376-byte *Wisdom of Laotse* PDF exported at version `8cd4803d9ff8ef4d`.
+- Cold trace `fd2045e8-073b-4f74-a616-72db7959a19b`: cache miss, server duration 6034 ms.
+- Warm trace `ed4153a0-fe98-4a19-983a-2b68959dca95`: cache hit, server duration 2369 ms,
+  `avoidedDownloadBytes: 27002376`. Sanitized session fingerprints differed between
+  these correlated traces, confirming reuse across MCP sessions.
+- Redeeming the second reference returned HTTP 200 and exactly 27,002,376 bytes.
+  Independently streamed SHA-256 matched the reference:
+  `a488df9b943079da2c4e4960430c163a4bc5f2d6c90d8157e919cb17a602bf1a`.
+- Authenticated health reported the deployed build and `authenticated_owner_drive`
+  scope. No reconnect, permission change, or kDrive mutation was performed.
+
+These timings are one live sample, not a latency guarantee. Restart persistence
+and timeout fallback remain automated-test coverage, not live fault-injection claims.
+Signed download references and raw session IDs are intentionally not recorded.
 
 The signed link is deliberately usable without the ChatGPT OAuth session by the intended consumer. Anyone possessing it can use it until expiration. Revoking the ChatGPT connection does not individually revoke outstanding five-minute capabilities; changing the signing secret or allowed owner invalidates them. Do not publish links, paste them into tickets, or log their full URLs. Cloudflare/request-log access must be treated as sensitive. Native MCP `resource_link` is returned alongside the URL, but an OpenAI-owned `file_id` cannot be fabricated; actual host materialization and cross-plugin ingestion require live verification.
 
