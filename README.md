@@ -14,6 +14,45 @@ and [REST API](https://developer.infomaniak.com/docs/api). It does not send file
 contents to a second AI service. The host model decides which tool to call; this
 server performs exact API operations.
 
+## Advantages and current limitations
+
+**Last verified: 2026-10-09.** The connector is useful for everyday kDrive work,
+but it is not yet a universally reliable large-file bridge between AI tools.
+These are deployment observations, not guarantees for every host or account.
+
+| Area | Advantage | Boundary |
+| --- | --- | --- |
+| Everyday file management | Natural paths, search, metadata, folder creation, and text uploads | Search/text previews depend on provider support; listings may be paginated |
+| Change safety | Prepared, version-bound sensitive changes; new-file uploads reject conflicts | Host approval and authentication still matter; permanent deletion is not exposed |
+| Presentation | Rich cards and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
+| Binary uploads | Native host file adapter, bounded streaming, checksums, no base64 in model context | Host must resolve the file; exact source-host allowlist can reject newly selected regions |
+| Binary exports | Short-lived raw-byte references, pinned version, size and SHA-256 | Downstream tools must support that reference or an explicit import bridge |
+
+Live checks passed for synthetic PNG, SVG, PDF, ZIP-format, and Markdown files,
+including independent download/hash comparisons. A 99 MiB upload also completed
+and a separate kDrive export re-read matched its source size and digest. However,
+repeated 99 MiB download-backs through the Worker were truncated; a correlated
+Cloudflare trace reported `exceededCpu`. A retry of an existing upload destination
+failed safely without overwriting or creating a renamed duplicate.
+
+The current deployment uses **Cloudflare Workers Free**. Its 10 ms CPU allowance
+is distinct from the connector's 120-second wall-clock transfer timeout. The
+configured 100 MiB binary ceiling is a safety limit, **not a promise of reliable
+100 MiB transfers**. There is no measured universal safe file-size cutoff.
+Cloudflare rejected an attempted configurable CPU budget because it requires
+Workers Paid; no account upgrade was performed. See the official
+[CPU limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
+
+ChatGPT Library folder names and shared conversation links are not automatically
+downloadable file references. Files must be made available through a supported
+host selection/attachment mechanism. Tool discovery, conversation restrictions,
+reconnect prompts, and materialization approvals also depend on the host; the
+connector cannot guarantee or repair those behaviors by itself.
+
+For now, use the connector for everyday operations and verified binary workflows;
+do not rely on it as the sole large-file backup path. Keep originals until the
+destination bytes have been independently verified.
+
 ## Why this exists
 
 This project grew out of my interest in diversifying my personal technology
@@ -48,7 +87,7 @@ below.
 - Rename, move, overwrite, and trash items through one normal host approval
 - Restore recoverable items from trash
 
-The connector accepts paths such as `/Private/Projects/brief.docx`; its public tool schemas contain no file IDs, folder IDs, or ETags. Sensitive changes use short-lived, one-use signed operation tokens bound to the resolved target, requested action, current file version, and exact replacement content when applicable. The token exchange stays internal while the host presents one ordinary approval. Permanent deletion and empty-trash operations are deliberately not exposed.
+File-management tools accept paths such as `/Private/Projects/brief.docx`, rather than requiring users to look up kDrive IDs or ETags. Binary native-file inputs separately use the host's file-reference contract. Sensitive changes use short-lived, one-use signed operation tokens bound to the resolved target, requested action, current file version, and exact replacement content when applicable. The token exchange stays internal while the host presents one ordinary approval. Permanent deletion and empty-trash operations are deliberately not exposed.
 
 ## Result contract and duplicate audits
 
@@ -239,9 +278,11 @@ Export returns `file_name`, `mime_type`, `size_bytes`, `sha256`, `resolved_versi
 
 Native inputs use OpenAI's documented `_meta["openai/fileParams"]` contract. A bare `file_id`, `/mnt/data/...`, or `sandbox:/...` string is **not** a remote file reference. The host must supply its temporary `download_url`. Reference upload never looks up another file by name. Existing destinations fail safely; these tools do not overwrite or automatically rename.
 
+Follow the host's file-selection instructions: Codex may accept a local path as its adapter input, while the raw MCP server requires the resolved object. Do not manually convert between those representations. The deployed upload correction supplies `binary_error_code` and `trace_id`; the client may normalize its generic `error_code`. Unknown source hosts remain blocked and require exact-host review, not alternate URL spellings or public rehosting. See [current limitations](#advantages-and-current-limitations).
+
 Uploads use an Infomaniak upload session, bounded 4 MiB buffers, incremental SHA-256, and per-chunk provider checksums. Size and optional expected SHA-256 are checked **before finalization**. No full-file buffering, base64 transport, new storage service, or source-URL persistence is involved. Supply `expected_size` if the source lacks Content-Length. Empty files can still use the inline action.
 
-**Live status (2026-10-01):** The 27 MB *Wisdom of Laotse* PDF exported and streamed to a verified local file with matching size/SHA-256, and a downstream PDF tool opened and rendered it. Acrobat accepted the host-file handoff but failed processing that document; universal cross-plugin compatibility is not claimed. Both Codex-generated and ChatGPT-generated PNG uploads now have independently verified kDrive download hashes. Unknown file-host regions still fail closed. See the [live acceptance evidence and working routes](docs/binary-interop-acceptance.md).
+**Earlier successful examples (2026-10-01):** A 27 MB PDF exported and streamed to a verified local file with matching size/SHA-256, and a downstream PDF tool opened and rendered it. Acrobat accepted the host-file handoff but failed processing that document. Both Codex-generated and ChatGPT-generated PNG uploads had independently verified kDrive download hashes. These examples do not establish universal cross-plugin or large-file reliability; see the [current limitations](#advantages-and-current-limitations) and [historical acceptance evidence](docs/binary-interop-acceptance.md).
 
 For files larger than the inline read limit, use **`kdrive_export_file`**, not `kdrive_read_file(mode="base64")`. Its `download_url` serves bytes; `openUrl` opens a human-facing page. If a downstream tool needs a local/native file rather than an HTTPS URL, the Node host bridge in [`src/binary-materialize.ts`](src/binary-materialize.ts) streams and verifies the export before returning `local_path`. The CLI (`npm run build`, then `node dist/download-cli.js`) accepts the reference JSON on **stdin** and outputs bounded metadata plus the verified local path. Never paste signed URLs into shell arguments or logs. Pass that path only to a downstream host adapter that explicitly accepts local files. ChatGPT runtimes without such a bridge cannot be made compatible by inventing a `file_id`.
 
@@ -253,6 +294,35 @@ by authenticated owner and drive and survives MCP session changes and Worker
 restarts; local stdio uses a per-registration in-memory cache. Each export still
 checks current access and version; each download still verifies the version,
 length, and SHA-256. First-time exports are unchanged.
+
+### Local Codex transfer: existing helper versus proposed direct path
+
+**Available now:** the Node materialization helper downloads a signed export
+through the remote Worker, writes to a private temporary file, and checks size
+and SHA-256 before returning its local path. Codex can pass that path to a tool
+whose native adapter explicitly accepts local files. This avoids binary data in
+model context, but **still depends on the Worker's download CPU budget**.
+
+**Proposed, not implemented as a complete transfer workflow:** a local transfer
+command would use the shared kDrive client and locally protected credentials to
+stream directly between kDrive and a temporary local file. It would pin/check the
+source version, verify size and SHA-256, and return only a local handle and
+metadata. Uploads would use conflict-safe sessions and verify the destination.
+Sensitive replacements would retain the existing prepare/change safeguards.
+
+```text
+kDrive API <-> local authenticated transfer + checksum verification
+                          <-> local file <-> supported Codex tool adapter
+```
+
+This would remove Cloudflare from the binary data path, not remove security
+checks. It would require your computer and local runtime to be available,
+explicit local kDrive credential setup, disk space, cancellation/cleanup rules,
+and end-to-end tests. Remote Worker secrets must not be exported to the model.
+Passing a file to another tool may upload it to that tool's service; local
+materialization does not mean all downstream processing stays on the computer.
+It would not grant access to unselected ChatGPT Library files or make a local
+path usable by a remote ChatGPT-only runtime.
 
 ## Development checks
 

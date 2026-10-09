@@ -104,3 +104,25 @@ wildcards to make a failed fetch succeed.
 
 After deploying, refresh the tool catalog to expose the native file-ref schema.
 See [implementation notes and live acceptance gates](../docs/binary-transport.md).
+
+### Current Free-plan limitation (verified 2026-10-09)
+
+The deployed account is on Workers Free. A near-limit 99 MiB upload and separate
+server-side digest verification succeeded, but full download-back requests were
+terminated with `exceededCpu`. Small-file checks passed; no universal reliable
+file-size cutoff has been established. The 100 MiB configuration is a maximum
+accepted size, not an end-to-end reliability guarantee.
+
+Workers Free allows 10 ms CPU per request. Network waiting and the connector's
+120-second transfer deadline are separate from that allowance. Cloudflare
+rejected a proposed `limits.cpu_ms: 5000` deployment with code `100328` because
+configurable CPU limits require Workers Paid. The setting was removed; the
+running deployment and account plan were unchanged. See [Cloudflare CPU
+limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
+
+Do not remove checksum/version checks or increase inline/base64 limits to mask
+this failure. Options are an approved paid CPU budget followed by repeated
+near-limit integrity tests, or a separately implemented local direct-transfer
+path. The existing local materialization helper still downloads through this
+Worker and therefore does not bypass its CPU limit. See the [local-path
+distinction and connector limitations](../README.md#local-codex-transfer-existing-helper-versus-proposed-direct-path).
