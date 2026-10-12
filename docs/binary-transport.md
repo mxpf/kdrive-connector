@@ -8,7 +8,7 @@ the local CLI for large files available on the local computer.
 | --- | --- | --- | --- |
 | Remote MCP binary tools | Cloudflare Worker | 100 MiB by default | 120 seconds |
 | Local signed-reference helper | Cloudflare Worker, then local file | Remote export limit | Subject to the remote deadline and CPU allowance |
-| Local `kdrive-transfer` CLI | Direct kDrive connection | 1 GiB | 30 minutes after initial credential loading |
+| Local `kdrive-transfer` CLI | Direct kDrive connection | 1 GiB | 30 minutes including credential loading |
 
 These are configured bounds, not verified reliable maxima. Remote 99 MiB
 download-backs failed with `exceededCpu`; one local 269 MB round trip passed.
@@ -228,7 +228,12 @@ checksum comparison pass. The local `version_id` is the checked current ETag,
 not a promise of retained historical bytes. A computed checksum without an
 expected digest is not independent proof of source identity.
 
-The CLI emits sanitized metadata or an error code. `UPLOADED_NOT_VERIFIED`
+The CLI emits sanitized metadata or an error code. Private upload receipts
+persist source checksums before mutation and record commit/verification states.
+Batch execution preflights an explicit manifest and stops after the first failure.
+Safe local reads retry transient failures at most twice; upload requests never
+automatically retry. See the local guide for retry and authentication deadlines.
+ `UPLOADED_NOT_VERIFIED`
 includes a receipt for a committed file; `UPLOAD_COMMIT_UNKNOWN` requires
 destination inspection. Neither outcome should trigger an automatic re-upload.
 See [local transfer setup and recovery](local-transfer.md) for commands,
@@ -276,3 +281,18 @@ CI runs both Node and Worker suites. These local checks do not establish live
 ChatGPT file-adapter or downstream Adobe compatibility. After deployment, verify
 the health build ID, a read-only export/download trace, and the refreshed tool
 catalog. Do not perform live mutation QA without explicit approval.
+
+## Compact result presentation — 2026-10-12
+
+The result resource is `ui://kdrive/results-v4.html`; v2 and v3 remain aliases for
+cached clients. Lists show five compact rows initially, with a shared parent
+folder once. Native details controls expose full paths and previews on demand.
+Show more reveals up to 20 additional already-returned rows at a time in a bounded
+scroll area. A pagination note distinguishes unseen provider pages from collapsed
+rows. Full results, cursors, and links remain in `structuredContent`; temporary
+looking filenames are not suppressed. Button labels identify the file for screen
+readers, and only HTTPS links are actionable.
+
+These source changes require a later, separately authorized Worker deployment
+and client tool/resource refresh to affect the remote ChatGPT panel. Local widget
+checks do not establish that a deployed host has refreshed its cached resource.

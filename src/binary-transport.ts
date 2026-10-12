@@ -197,10 +197,10 @@ export async function* binaryChunks(body: ReadableStream<Uint8Array>, maxBytes: 
   }
 }
 
-export async function hashBinary(body: ReadableStream<Uint8Array>, maxBytes: number, signal: AbortSignal) {
+export async function hashBinary(body: ReadableStream<Uint8Array>, maxBytes: number, signal: AbortSignal, onProgress?: (bytes: number) => void) {
   const hash = createHash("sha256");
   let size = 0;
-  for await (const chunk of binaryChunks(body, maxBytes, signal)) { hash.update(chunk); size += chunk.byteLength; }
+  for await (const chunk of binaryChunks(body, maxBytes, signal)) { hash.update(chunk); size += chunk.byteLength; onProgress?.(size); }
   return { size_bytes: size, sha256: hash.digest("hex") };
 }
 

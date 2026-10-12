@@ -39,9 +39,13 @@ export function operationalErrorCode(value: unknown): string | undefined {
   return boundedErrorCode(value);
 }
 
+let infoEnabled = true;
+/** Local CLI suppresses low-level request logs; MCP deployments retain diagnostics. */
+export function setOperationalInfoEnabled(enabled: boolean) { infoEnabled = enabled; }
+
 export function logOperationalInfo(entry: OperationalLogEntry): void {
   // stdout is exclusively the MCP protocol channel for the stdio server.
-  console.error(JSON.stringify(entry));
+  if (infoEnabled) console.error(JSON.stringify(entry));
 }
 
 export function logOperationalError(entry: OperationalLogEntry): void {

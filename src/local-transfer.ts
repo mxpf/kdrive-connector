@@ -11,11 +11,15 @@ import { classifyBinaryFailure, hashBinary } from "./binary-transport.js";
 // Local-only limits: never change the remote Worker's ceiling or CPU budget.
 export const LOCAL_MAX_BYTES = 1024 * 1024 * 1024;
 export const LOCAL_TIMEOUT_MS = 30 * 60 * 1000;
-type Client = Pick<KDriveClient, "resolvePath" | "resolveBinaryVersion" | "downloadVersionStream" | "uploadBinary">;
+export type TransferClient = Pick<KDriveClient, "resolvePath" | "resolveBinaryVersion" | "downloadVersionStream" | "uploadBinary">;
 export interface LocalTransferOptions {
   signal: AbortSignal;
   expectedSize?: number;
   expectedSha256?: string;
+  temporaryRoot?: string;
+  onProgress?: (progress: { stage: string; bytes: number; total: number }) => void;
+  onSnapshot?: (snapshot: { size_bytes: number; sha256: string }) => Promise<void>;
+  onCommitted?: (receipt: Record<string, unknown>) => Promise<void>;
 }
 
 export class LocalTransferError extends Error {
@@ -24,7 +28,7 @@ export class LocalTransferError extends Error {
   }
 }
 
-function validateExpectations(options: LocalTransferOptions) {
+export function validateExpectations(options: LocalTransferOptions) {
   if (options.expectedSize !== undefined && (!Number.isSafeInteger(options.expectedSize) || options.expectedSize < 1 || options.expectedSize > LOCAL_MAX_BYTES)) {
     throw new LocalTransferError("INVALID_EXPECTED_SIZE");
   }
@@ -45,7 +49,7 @@ function checkIntegrity(size: number, sha256: string, options: LocalTransferOpti
   }
 }
 
-function remotePath(value: string) {
+export function remotePath(value: string) {
   if (!value.startsWith("/") || /[\x00-\x1f\x7f]/.test(value)) throw new LocalTransferError("INVALID_REMOTE_PATH");
   return normalizeKDrivePath(value);
 }
@@ -58,6 +62,7 @@ async function snapshot(source: string, directory: string, options: LocalTransfe
     const before = await handle.stat({ bigint: true });
     if (!before.isFile()) throw new LocalTransferError("REGULAR_FILE_REQUIRED");
     checkSize(Number(before.size));
+    options.onProgress?.({ stage: "preparing", bytes: 0, total: Number(before.size) });
     const sha = createHash("sha256");
     let size = 0;
     const filename = path.join(directory, "snapshot");
@@ -65,7 +70,7 @@ async function snapshot(source: string, directory: string, options: LocalTransfe
       for await (const chunk of input) {
         size += chunk.length;
         if (size > Number(before.size)) throw new LocalTransferError("SOURCE_CHANGED");
-        sha.update(chunk); yield chunk;
+        sha.update(chunk); options.onProgress?.({ stage: "preparing", bytes: size, total: Number(before.size) }); yield chunk;
       }
     }, createWriteStream(filename, { flags: "wx", mode: 0o600 }), { signal: options.signal });
     const after = await handle.stat({ bigint: true });
@@ -78,8 +83,16 @@ async function snapshot(source: string, directory: string, options: LocalTransfe
   } finally { await handle.close(); }
 }
 
+/** Check a source against a manifest without contacting kDrive. */
+export async function inspectLocalSource(source: string, options: LocalTransferOptions) {
+  validateExpectations(options);
+  const directory = await mkdtemp(path.join(options.temporaryRoot ?? os.tmpdir(), "kdrive-preview-"));
+  try { const copy = await snapshot(source, directory, options); return { size_bytes: copy.size, sha256: copy.sha256 }; }
+  finally { await rm(directory, { recursive: true, force: true }); }
+}
+
 /** Independent direct-provider readback; no Worker export, cache, or inline digest. */
-export async function verifyLocalTransfer(client: Client, driveId: number, destination: string,
+export async function verifyLocalTransfer(client: TransferClient, driveId: number, destination: string,
   options: LocalTransferOptions, expectedFileId?: number) {
   validateExpectations(options);
   const normalized = remotePath(destination);
@@ -88,7 +101,9 @@ export async function verifyLocalTransfer(client: Client, driveId: number, desti
   if (expectedFileId !== undefined && pinned.file.id !== expectedFileId) throw new LocalTransferError("DESTINATION_CHANGED");
   const response = await client.downloadVersionStream(driveId, pinned.file.id, pinned.versionId, options.signal);
   if (!response.ok || !response.body) { await response.body?.cancel(); throw new LocalTransferError("DOWNLOAD_FAILED"); }
-  const digest = await hashBinary(response.body, pinned.file.size!, options.signal);
+  options.onProgress?.({ stage: "verifying", bytes: 0, total: pinned.file.size! });
+  const digest = await hashBinary(response.body, pinned.file.size!, options.signal,
+    bytes => options.onProgress?.({ stage: "verifying", bytes, total: pinned.file.size! }));
   checkIntegrity(digest.size_bytes, digest.sha256, { ...options, expectedSize: pinned.file.size! });
   checkIntegrity(digest.size_bytes, digest.sha256, options);
   return { verified: true, path: normalized, file_id: pinned.file.id, file_name: pinned.file.name,
@@ -96,23 +111,26 @@ export async function verifyLocalTransfer(client: Client, driveId: number, desti
     sha256: digest.sha256, version_id: pinned.versionId };
 }
 
-export async function uploadLocalFile(client: Client, driveId: number, source: string, destination: string, options: LocalTransferOptions) {
+export async function uploadLocalFile(client: TransferClient, driveId: number, source: string, destination: string, options: LocalTransferOptions) {
   validateExpectations(options);
   const normalized = remotePath(destination);
   const { parentPath, name } = splitKDrivePath(normalized);
-  const directory = await mkdtemp(path.join(os.tmpdir(), "kdrive-upload-"));
+  const directory = await mkdtemp(path.join(options.temporaryRoot ?? os.tmpdir(), "kdrive-upload-"));
   try {
     const copy = await snapshot(source, directory, options);
+    await options.onSnapshot?.({ size_bytes: copy.size, sha256: copy.sha256 });
     const parent = await client.resolvePath(driveId, parentPath, options.signal);
     if (parent.type !== "dir") throw new LocalTransferError("DESTINATION_NOT_DIRECTORY");
     // The provider atomically enforces conflict:error; no check-then-overwrite race.
     const result = await client.uploadBinary(driveId, {
       directoryId: parent.id, fileName: name, size: copy.size, expectedSha256: copy.sha256,
+      onProgress: (stage, bytes = 0) => options.onProgress?.({ stage: stage === "finalization" ? "finalizing" : "uploading", bytes, total: copy.size }),
       body: Readable.toWeb(createReadStream(copy.filename)) as ReadableStream<Uint8Array>, signal: options.signal,
     });
     const receipt = { uploaded: true, verified: false, path: normalized, file_id: result.file.id,
       size_bytes: copy.size, sha256: copy.sha256 };
     try {
+      await options.onCommitted?.(receipt);
       if (!Number.isSafeInteger(result.file.id) || result.file.id <= 0 || result.file.name !== name) {
         throw new LocalTransferError("DESTINATION_METADATA_INVALID");
       }
@@ -127,15 +145,16 @@ export async function uploadLocalFile(client: Client, driveId: number, source: s
 }
 
 /** Return a private, verified local file for a downstream tool; caller owns cleanup. */
-export async function downloadLocalFile(client: Client, driveId: number, source: string, options: LocalTransferOptions) {
+export async function downloadLocalFile(client: TransferClient, driveId: number, source: string, options: LocalTransferOptions) {
   validateExpectations(options);
   const normalized = remotePath(source);
   const pinned = await client.resolveBinaryVersion(driveId, normalized, options.signal);
   checkSize(pinned.file.size!);
-  const directory = await mkdtemp(path.join(os.tmpdir(), "kdrive-download-"));
+  const directory = await mkdtemp(path.join(options.temporaryRoot ?? os.tmpdir(), "kdrive-download-"));
   try {
     const response = await client.downloadVersionStream(driveId, pinned.file.id, pinned.versionId, options.signal);
     if (!response.ok || !response.body) { await response.body?.cancel(); throw new LocalTransferError("DOWNLOAD_FAILED"); }
+    options.onProgress?.({ stage: "downloading", bytes: 0, total: pinned.file.size! });
     const partial = path.join(directory, ".partial");
     const sha = createHash("sha256");
     let size = 0;
@@ -143,7 +162,7 @@ export async function downloadLocalFile(client: Client, driveId: number, source:
       for await (const chunk of input) {
         size += chunk.length;
         if (size > pinned.file.size!) throw new LocalTransferError("INTEGRITY_MISMATCH");
-        sha.update(chunk); yield chunk;
+        sha.update(chunk); options.onProgress?.({ stage: "downloading", bytes: size, total: pinned.file.size! }); yield chunk;
       }
     }, createWriteStream(partial, { flags: "wx", mode: 0o600 }), { signal: options.signal });
     const sha256 = sha.digest("hex");

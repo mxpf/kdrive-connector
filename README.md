@@ -16,7 +16,7 @@ server performs exact API operations.
 
 ## Advantages and current limitations
 
-**Evidence updated: 2026-10-11.** The connector is useful for everyday kDrive work,
+**Evidence updated: 2026-10-12.** The connector is useful for everyday kDrive work,
 but it is not yet a universally reliable large-file bridge between AI tools.
 These are recorded observations, not guarantees for every host or account.
 
@@ -102,7 +102,10 @@ File-management tools accept paths such as `/Private/Projects/brief.docx`, rathe
 `structuredContent` is the canonical machine-readable result. Text content is a
 short outcome with at most one open link; it does not repeat file contents,
 complete directory JSON, or a link appendix. Directory/search items, previews,
-pagination, and open URLs remain in structured data and the existing result UI.
+pagination, and open URLs remain in structured data and the result UI. The panel
+shows five compact rows initially and a shared folder once. Expand a filename
+for its full path and preview, or choose Show more for remaining returned items.
+Long expanded lists scroll within the panel. No results are filtered by filename.
 Callers needing links for every item can render those URLs when requested.
 Base64 reads retain their explicit attachment resource link. Text-only clients
 must consume structured results to obtain complete data.
@@ -157,8 +160,8 @@ npm run build
 npm test
 ```
 
-Node.js 20 or newer is required for the server. Use Node.js 20.19+ for
-`npm run transfer`, which uses the optional env-file flag.
+Use Node.js 24 or newer. The checked-in `.nvmrc` and CI use Node 24; CI checks
+both Linux and macOS.
 
 ### 2. Configure the drive
 
@@ -334,7 +337,7 @@ The destination parent must already exist. Uploads stream a private local snapsh
 into conflict-safe kDrive sessions, then independently download the committed
 file ID, checking its version, full byte length, and SHA-256 against that snapshot.
 Existing destinations are never overwritten or automatically renamed. There are
-no automatic retries. `UPLOADED_NOT_VERIFIED` returns a receipt for an existing
+no automatic upload retries. `UPLOADED_NOT_VERIFIED` returns a receipt for an existing
 upload that needs verification; `UPLOAD_COMMIT_UNKNOWN` means inspect the
 destination before attempting anything else. Never delete the source on either
 outcome. Replacements are deliberately not supported by this command.
@@ -347,6 +350,12 @@ identity against an independent source digest. Partial downloads and upload
 snapshots are removed on handled failure/cancellation; successful downloads are
 kept for downstream tools and explicit cleanup. Forced process termination or
 power loss can leave private temporary directories behind.
+
+Use `npm run transfer -- doctor` for offline readiness checks. Transfers offer
+throttled progress, private saved upload receipts, and verification from a receipt.
+`batch --manifest /absolute/manifest.json` previews an explicit checksummed file
+list; add `--execute` to transfer it sequentially. Safe reads retry briefly, while
+writes and uncertain uploads never automatically replay.
 
 See [local transfer setup, safety, and verification](docs/local-transfer.md).
 The [dated acceptance record](docs/binary-interop-acceptance.md#local-direct-transfer--2026-10-11)
@@ -384,3 +393,8 @@ test suite.
 On October 11, the recovered implementation passed 141 root tests, 21 Worker
 tests, both type checks, and the root build on Yantra. These local checks did not
 repeat the earlier live transfer or establish local authentication on Yantra.
+
+The October 12 reliability and compact-results update passed 157 root tests, 21
+Worker tests, both type checks, and the root build locally. It adds a Node 24
+Linux/macOS CI matrix. The offline readiness check reports missing local
+credentials on Yantra; no new live upload or deployment was performed.

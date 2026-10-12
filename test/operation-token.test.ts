@@ -116,7 +116,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   assert.throws(() => refSchema.parse({ file_id: "file-host-issued" }));
   assert.deepEqual(
     [...resourceRegistrations.keys()].sort(),
-    ["ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html"],
+    ["ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html", "ui://kdrive/results-v4.html"],
   );
   const forbidden = new Set(["fileId", "directoryId", "parentId", "destinationDirectoryId", "restoreId", "etag"]);
   for (const [name, definition] of registrations) {
@@ -131,7 +131,7 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
   );
   assert.equal(
     ((registrations.get("kdrive_search")!._meta as Record<string, unknown>).ui as Record<string, unknown>).resourceUri,
-    "ui://kdrive/results-v3.html",
+    "ui://kdrive/results-v4.html",
   );
   assert.ok(registrations.get("kdrive_search")!.outputSchema);
   assert.match(String(registrations.get("kdrive_list_directory")!.description), /without first enumerating ancestors or searching/);
@@ -179,8 +179,13 @@ function verifyResultsRendering(html: string) {
     children: Element[] = [];
     textContent = "";
     className = "";
+    disabled = false;
+    attributes: Record<string, string> = {};
+    parent?: Element;
+    setAttribute(key: string, value: string) { this.attributes[key] = value; }
+    remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
     listeners = new Map<string, () => void>();
-    append(...children: Element[]) { this.children.push(...children); }
+    append(...children: Element[]) { for (const child of children) child.parent = this; this.children.push(...children); }
     replaceChildren() { this.children = []; }
     addEventListener(name: string, callback: () => void) { this.listeners.set(name, callback); }
   }
@@ -198,7 +203,7 @@ function verifyResultsRendering(html: string) {
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
   runInNewContext(script, {
-    window,
+    window, URL,
     document: { getElementById: () => root, createElement: () => new Element() },
     ResizeObserver: class { observe() {} },
     requestAnimationFrame: () => 1,
@@ -218,16 +223,30 @@ function verifyResultsRendering(html: string) {
   assert.equal(root.children[0].textContent, "No kDrive results.");
   window.openai.toolOutput = { items: [{ name: "receipt.png", path: "/Private/00 Inbox/receipt.png", preview: "Receipt", openUrl: "https://example.test/open/receipt" }] };
   events.get("openai:set_globals")!();
-  assert.equal(root.children.length, 1);
-  const card = root.children[0];
+  assert.equal(root.children.length, 3);
+  assert.equal(root.children[1].textContent, "/Private/00 Inbox");
+  const card = root.children[2].children[0];
   assert.deepEqual(card.children[0].children.map((node) => node.textContent), ["receipt.png", "/Private/00 Inbox/receipt.png", "Receipt"]);
-  assert.equal(card.children[1].textContent, "Open in kDrive");
+  assert.equal(card.children[1].textContent, "Open ↗");
+  assert.equal(card.children[1].attributes["aria-label"], "Open receipt.png in kDrive");
   card.children[1].listeners.get("click")!();
   assert.equal((opened[0] as { href: string }).href, "https://example.test/open/receipt");
   window.openai.toolOutput = undefined;
   events.get("openai:set_globals")!();
   message({});
-  assert.equal(root.children[0], card);
+  assert.equal(root.children[2].children[0], card);
+  message({ items: Array.from({ length: 63 }, (_, index) => ({ name: "file-" + index, path: "/Private/Archive/file-" + index,
+    openUrl: index === 0 ? "javascript:alert(1)" : "https://example.test/open/" + index })), hasMore: true });
+  const list = root.children.find(child => child.className === "results")!;
+  assert.equal(list.children.length, 5);
+  assert.equal(list.children[0].children[1].disabled, true);
+  assert.equal(root.children.filter(child => child.className === "folder").length, 1);
+  const more = root.children.find(child => child.className === "more")!;
+  more.listeners.get("click")!(); assert.equal(list.children.length, 25);
+  more.listeners.get("click")!(); more.listeners.get("click")!();
+  assert.equal(list.children.length, 63);
+  assert.ok(!root.children.includes(more));
+  assert.match(root.children.at(-1)!.textContent, /next page/);
   message({ items: [] });
   assert.equal(root.children[0].textContent, "No kDrive results.");
 }

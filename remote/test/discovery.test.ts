@@ -43,7 +43,9 @@ it.each([false, true])("discovers all tools and resources with notification miti
       },
       required: ["download_url", "file_id"],
     });
-    expect(resources.resources).toHaveLength(2);
+    expect(resources.resources.map(resource => resource.uri).sort()).toEqual([
+      "ui://kdrive/results-v2.html", "ui://kdrive/results-v3.html", "ui://kdrive/results-v4.html",
+    ]);
     expect(templates.resourceTemplates).toHaveLength(0);
   } finally {
     await client.close();

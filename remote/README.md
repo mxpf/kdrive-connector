@@ -20,7 +20,7 @@ other remote MCP clients.
 
 ## Deploy
 
-Install dependencies and create the OAuth state namespace:
+Use Node.js 24 or newer. Install dependencies and create the OAuth state namespace:
 
 ```bash
 npm ci
@@ -129,3 +129,12 @@ kDrive using local credentials. One 269 MB live round trip passed; the configure
 or billing change. The older signed-reference materialization helper still
 downloads through this Worker and therefore does not bypass its CPU limit. See the [local-path
 distinction and connector limitations](../README.md#local-codex-transfer-direct-large-file-path).
+
+## Compact file results
+
+The current source serves a compact v4 result panel: five initial rows, one shared
+folder label, expandable paths/previews, and Show more for remaining returned
+items. All result metadata remains available to the host. v2/v3 resource aliases
+serve the same layout for cached clients. This UI change takes effect remotely
+only after an authorized deployment and host resource refresh; committing or
+pushing the source does not deploy it.

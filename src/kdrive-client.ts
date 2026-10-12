@@ -264,9 +264,9 @@ export class KDriveClient {
     return payload;
   }
 
-  async getDrive(driveId: number): Promise<Record<string, unknown>> {
+  async getDrive(driveId: number, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const response = await this.jsonRequest<Record<string, unknown>>(`/2/drive/${driveId}`, {
-      query: { with: "capabilities,rights,quota" },
+      query: { with: "capabilities,rights,quota" }, signal,
       diagnostics: { operation: "get_drive" },
     });
     return response.data ?? {};

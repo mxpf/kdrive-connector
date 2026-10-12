@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { abortable } from "./transfer-network.js";
 import { AuthenticationError } from "./errors.js";
 
 const KEYCHAIN_SERVICE = "kdrive-connector.oauth";
@@ -62,7 +63,7 @@ export function readClientSecretFromKeychain(clientId: string): string | undefin
     return execFileSync(
       "security",
       ["find-generic-password", "-a", clientId, "-s", KEYCHAIN_SERVICE, "-w"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
     ).trim();
   } catch {
     return undefined;
@@ -105,7 +106,7 @@ export function readAccessTokenFromKeychain(): string | undefined {
         API_TOKEN_KEYCHAIN_SERVICE,
         "-w",
       ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
     ).trim();
   } catch {
     return undefined;
@@ -123,8 +124,11 @@ export async function requestTokens(
   config: TokenEndpointConfig,
   form: Record<string, string>,
   fetchImpl: typeof fetch = fetch,
+  signal: AbortSignal = AbortSignal.timeout(30_000),
 ): Promise<TokenRecord> {
-  const response = await fetchImpl(config.tokenUrl, {
+  signal.throwIfAborted();
+  const response = await abortable(fetchImpl(config.tokenUrl, {
+    signal,
     method: "POST",
     headers: {
       accept: "application/json",
@@ -135,8 +139,8 @@ export async function requestTokens(
       client_secret: config.clientSecret,
       ...form,
     }),
-  });
-  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  }), signal);
+  const payload = (await abortable(response.json().catch(() => ({})), signal)) as Record<string, unknown>;
   if (!response.ok || typeof payload.access_token !== "string") {
     const reason = typeof payload.error_description === "string"
       ? payload.error_description
@@ -169,10 +173,11 @@ export class TokenProvider {
     },
   ) {}
 
-  async getAccessToken(forceRefresh = false): Promise<string> {
+  async getAccessToken(forceRefresh = false, signal: AbortSignal = AbortSignal.timeout(30_000)): Promise<string> {
+    signal.throwIfAborted();
     if (this.options.accessToken) return this.options.accessToken;
 
-    const record = await this.options.store.read();
+    const record = await abortable(this.options.store.read(), signal);
     if (!record) {
       throw new AuthenticationError(
         "kDrive is not authenticated. Run `npm run auth` or set INFOMANIAK_ACCESS_TOKEN.",
@@ -203,6 +208,7 @@ export class TokenProvider {
       },
       { grant_type: "refresh_token", refresh_token: record.refresh_token },
       this.options.fetchImpl,
+      signal,
     );
     const next: TokenRecord = {
       ...record,

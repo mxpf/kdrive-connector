@@ -30,7 +30,7 @@ import { registerBinaryTools, type BinaryToolConfig } from "./binary-tools.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v3.html";
+const KDRIVE_RESULTS_UI_URI = "ui://kdrive/results-v4.html";
 const KDRIVE_RESULTS_UI_LEGACY_URI = "ui://kdrive/results-v2.html";
 
 const KDRIVE_RESULTS_UI = `
@@ -42,11 +42,21 @@ const KDRIVE_RESULTS_UI = `
   <style>
     :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     body { margin: 0; padding: 10px; background: transparent; color: CanvasText; }
-    #root { display: grid; gap: 8px; }
-    .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 12px; }
-    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-    .path, .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 12px; }
-    button { appearance: none; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 999px; padding: 7px 11px; background: color-mix(in srgb, CanvasText 7%, transparent); color: inherit; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+    #root { display: grid; gap: 4px; font-size: 13px; }
+    .heading { font-weight: 650; padding: 2px 4px; }
+    .folder, .more-note { color: color-mix(in srgb, CanvasText 65%, transparent); font-size: 12px; padding: 2px 4px; overflow-wrap: anywhere; }
+    .folder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .results { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+    summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 7px 0; }
+    details { min-width: 0; }
+    details[open] summary { white-space: normal; overflow-wrap: anywhere; }
+    button:focus-visible, summary:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+    .more { justify-self: start; margin: 4px 0; }
+    @media (max-width: 360px) { .item { gap: 6px; } }
+    .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 2px 4px; border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent); }
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .path, .preview { overflow-wrap: anywhere; margin: 2px 0 6px; color: color-mix(in srgb, CanvasText 68%, transparent); font-size: 12px; }
+    button { appearance: none; border: 0; border-radius: 6px; padding: 7px 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
     button:hover { background: color-mix(in srgb, CanvasText 12%, transparent); }
     .empty { padding: 12px; color: color-mix(in srgb, CanvasText 68%, transparent); }
   </style>
@@ -85,36 +95,84 @@ const KDRIVE_RESULTS_UI = `
         notifyHeight();
         return;
       }
-      for (const item of items.slice(0, 10)) {
-        const card = document.createElement("div");
-        card.className = "item";
-        const copy = document.createElement("div");
-        const name = document.createElement("div");
-        name.className = "name";
-        name.textContent = item.name || "kDrive item";
-        copy.append(name);
-        if (item.path) {
-          const path = document.createElement("div");
-          path.className = "path";
-          path.textContent = item.path;
-          copy.append(path);
+      const heading = document.createElement("div");
+      heading.className = "heading";
+      heading.textContent = items.length + (items.length === 1 ? " result" : " results") + (output.hasMore ? " on this page" : "");
+      root.append(heading);
+      const parentOf = item => typeof item.path === "string" ? item.path.slice(0, item.path.lastIndexOf("/")) || "/" : "";
+      const parent = parentOf(items[0]);
+      const sharedFolder = parent && items.every(item => parentOf(item) === parent) ? parent : "";
+      if (sharedFolder) {
+        const folder = document.createElement("div");
+        folder.className = "folder";
+        folder.textContent = sharedFolder;
+        folder.title = sharedFolder;
+        root.append(folder);
+      }
+      const list = document.createElement("div");
+      list.className = "results";
+      root.append(list);
+      let visible = 0;
+      const addRows = count => {
+        for (const item of items.slice(visible, visible + count)) {
+          const row = document.createElement("div");
+          row.className = "item";
+          const copy = document.createElement("details");
+          const name = document.createElement("summary");
+          name.className = "name";
+          name.textContent = item.name || "kDrive item";
+          name.title = item.path || item.name || "kDrive item";
+          copy.append(name);
+          if (item.path) {
+            const detail = document.createElement("div");
+            detail.className = "path";
+            detail.textContent = item.path;
+            copy.append(detail);
+          }
+          if (item.preview) {
+            const preview = document.createElement("div");
+            preview.className = "preview";
+            preview.textContent = item.preview;
+            copy.append(preview);
+          }
+          copy.addEventListener("toggle", notifyHeight);
+          const open = document.createElement("button");
+          open.type = "button";
+          open.textContent = "Open ↗";
+          open.setAttribute("aria-label", "Open " + (item.name || "item") + " in kDrive");
+          // Only web links are actionable; file names/previews are always plain text.
+          let href;
+          try { const url = new URL(item.openUrl); if (url.protocol === "https:") href = url.href; } catch {}
+          open.disabled = !href;
+          open.addEventListener("click", () => {
+            if (!href) return;
+            if (window.openai?.openExternal) window.openai.openExternal({ href, redirectUrl: false });
+            else window.open(href, "_blank", "noopener,noreferrer");
+          });
+          row.append(copy, open);
+          list.append(row);
         }
-        if (item.preview) {
-          const preview = document.createElement("div");
-          preview.className = "preview";
-          preview.textContent = item.preview;
-          copy.append(preview);
-        }
-        const open = document.createElement("button");
-        open.type = "button";
-        open.textContent = "Open in kDrive";
-        open.addEventListener("click", () => {
-          if (!item.openUrl) return;
-          if (window.openai?.openExternal) window.openai.openExternal({ href: item.openUrl, redirectUrl: false });
-          else window.open(item.openUrl, "_blank", "noopener,noreferrer");
+        visible = Math.min(items.length, visible + count);
+      };
+      addRows(5);
+      if (items.length > visible) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "more";
+        const label = () => { more.textContent = "Show more (" + (items.length - visible) + " remaining)"; };
+        label();
+        more.addEventListener("click", () => {
+          addRows(20);
+          if (visible === items.length) more.remove(); else label();
+          notifyHeight();
         });
-        card.append(copy, open);
-        root.append(card);
+        root.append(more);
+      }
+      if (output.hasMore) {
+        const note = document.createElement("div");
+        note.className = "more-note";
+        note.textContent = "More results are available. Ask for the next page.";
+        root.append(note);
       }
       notifyHeight();
     }
@@ -427,7 +485,7 @@ function kDriveResultsResource(uri: string): Record<string, unknown> {
           domain: "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
           csp: { connectDomains: [], resourceDomains: [] },
         },
-        "openai/widgetDescription": "A compact list of kDrive files with paths, previews, and Open in kDrive buttons.",
+        "openai/widgetDescription": "A compact kDrive result list. Five rows initially; expand names for paths and previews, or show more results. Avoid repeating the list in the chat unless requested.",
         "openai/widgetPrefersBorder": true,
         "openai/widgetDomain": "https://kdrive-connector-mcp.maxpfennighaus.workers.dev",
         "openai/widgetCSP": {
@@ -470,6 +528,13 @@ export function registerKDriveTools(
     KDRIVE_RESULTS_UI_LEGACY_URI,
     {},
     async () => kDriveResultsResource(KDRIVE_RESULTS_UI_LEGACY_URI),
+  );
+
+  resourceServer.registerResource(
+    "kdrive-results-v3-compatibility",
+    "ui://kdrive/results-v3.html",
+    {},
+    async () => kDriveResultsResource("ui://kdrive/results-v3.html"),
   );
 
   server.registerTool(

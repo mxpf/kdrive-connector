@@ -151,16 +151,17 @@ test("verify-only checks an existing file without uploading", async () => {
   assert.equal(h.counts().uploads, 0); assert.equal(h.counts().downloads, 1);
 });
 
-test("stalled downloads abort and leave no partial temporary directory", async () => {
-  const before = (await readdir(os.tmpdir())).filter(n => n.startsWith("kdrive-download-"));
+test("stalled downloads abort and leave no partial temporary directory", async t => {
+  const { directory } = await fixture(t);
+  const before = await readdir(directory);
   const h = harness(); let cancelled = false;
   h.client.downloadVersionStream = async () => new Response(new ReadableStream({ cancel() { cancelled = true; } }));
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 100);
-  try { await assert.rejects(downloadLocalFile(h.client, 42, "/Private/a", { signal: abort.signal })); }
+  try { await assert.rejects(downloadLocalFile(h.client, 42, "/Private/a", { signal: abort.signal, temporaryRoot: directory })); }
   finally { clearTimeout(timer); }
   assert.equal(cancelled, true);
-  assert.deepEqual((await readdir(os.tmpdir())).filter(n => n.startsWith("kdrive-download-")), before);
+  assert.deepEqual(await readdir(directory), before);
 });
 
 test("CLI rejects untrusted API configuration without echoing credentials", () => {
