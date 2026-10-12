@@ -8,7 +8,7 @@ export const BINARY_MAX_BYTES = 100 * 1024 * 1024;
 export const BINARY_TIMEOUT_MS = 120_000;
 export const EXPORT_TTL_MS = 5 * 60_000;
 
-export type BinaryErrorCode = "BINARY_TRANSFER_FAILED" | "SOURCE_HOST_DENIED" | "FILE_REFERENCE_UNRESOLVED" | "TRANSFER_TIMEOUT" | "INTEGRITY_MISMATCH" | "VERSION_CHANGED" | "UPLOAD_COMMIT_UNKNOWN" | "UPSTREAM_AUTHENTICATION_FAILED" | "UPSTREAM_ACCESS_DENIED" | "UPSTREAM_RATE_LIMITED" | "UPSTREAM_UNAVAILABLE";
+export type BinaryErrorCode = "BINARY_TRANSFER_FAILED" | "SOURCE_HOST_DENIED" | "FILE_REFERENCE_UNRESOLVED" | "SOURCE_URL_INVALID" | "SOURCE_URL_EXPIRED" | "SOURCE_AUTHENTICATION_FAILED" | "SOURCE_ACCESS_DENIED" | "SOURCE_NOT_FOUND" | "SOURCE_REDIRECT_LIMIT" | "SIZE_LIMIT_EXCEEDED" | "SOURCE_SIZE_REQUIRED" | "DESTINATION_CONFLICT" | "TRANSFER_TIMEOUT" | "INTEGRITY_MISMATCH" | "VERSION_CHANGED" | "UPLOAD_COMMIT_UNKNOWN" | "UPSTREAM_AUTHENTICATION_FAILED" | "UPSTREAM_ACCESS_DENIED" | "UPSTREAM_RATE_LIMITED" | "UPSTREAM_UNAVAILABLE";
 export class BinaryTransferError extends Error {
   constructor(message: string, readonly code: BinaryErrorCode = "BINARY_TRANSFER_FAILED") { super(message); }
 }
@@ -20,6 +20,7 @@ export function classifyBinaryFailure(error: unknown): BinaryErrorCode {
     if (error.status === 401) return "UPSTREAM_AUTHENTICATION_FAILED";
     if (error.status === 403) return "UPSTREAM_ACCESS_DENIED";
     if (error.status === 429) return "UPSTREAM_RATE_LIMITED";
+    if (error.status === 409) return "DESTINATION_CONFLICT";
   }
   if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) return "TRANSFER_TIMEOUT";
   return "UPSTREAM_UNAVAILABLE";
@@ -86,7 +87,7 @@ export function validateSourceUrl(value: string, trustedHosts: readonly string[]
     throw new BinaryTransferError("File reference was not resolved to an HTTPS download URL. Select the conversation file through the host file-parameter adapter; do not retry with a local path, sandbox URI, or bare file ID.", "FILE_REFERENCE_UNRESOLVED");
   }
   let url: URL;
-  try { url = new URL(value); } catch { throw new BinaryTransferError("Invalid binary source URL."); }
+  try { url = new URL(value); } catch { throw new BinaryTransferError("Invalid binary source URL.", "SOURCE_URL_INVALID"); }
   const host = url.hostname.toLowerCase();
   if (url.protocol !== "https:" || url.username || url.password || url.hash || (url.port && url.port !== "443")
     || host.startsWith("[") || isIP(host) || !host.includes(".") || host.endsWith(".")
@@ -112,6 +113,12 @@ export async function fetchBinarySource(
   let url = validateSourceUrl(value, trustedHosts);
   for (let redirects = 0; redirects <= 3; redirects++) {
     signal.throwIfAborted();
+    // SAS-style expiry is advisory evidence only, never authorization. Validate
+    // host first; do not infer that every 403 means an expired reference.
+    const expiry = url.searchParams.get("se");
+    if (expiry && Number.isFinite(Date.parse(expiry)) && Date.parse(expiry) <= Date.now()) {
+      throw new BinaryTransferError("Source download URL has expired. Reselect the original file through the host adapter for a fresh reference.", "SOURCE_URL_EXPIRED");
+    }
     await withinDeadline(checkDns(url.hostname), signal);
     signal.throwIfAborted();
     let response: Response;
@@ -123,27 +130,33 @@ export async function fetchBinarySource(
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       await response.body?.cancel();
       const location = response.headers.get("location");
-      if (!location || redirects === 3) throw new BinaryTransferError("Binary source exceeded its redirect limit.");
-      url = validateSourceUrl(new URL(location, url).href, trustedHosts);
+      if (!location || redirects === 3) throw new BinaryTransferError("Binary source exceeded its redirect limit.", "SOURCE_REDIRECT_LIMIT");
+      let target: URL;
+      try { target = new URL(location, url); } catch { throw new BinaryTransferError("Invalid binary source redirect.", "SOURCE_URL_INVALID"); }
+      url = validateSourceUrl(target.href, trustedHosts);
       continue;
     }
     if (response.status !== 200 || !response.body || (response.headers.get("content-encoding") ?? "identity") !== "identity") {
       await response.body?.cancel();
+      if (response.status === 401) throw new BinaryTransferError("Source download authorization failed. Reselect the file through the host adapter.", "SOURCE_AUTHENTICATION_FAILED");
+      if (response.status === 403) throw new BinaryTransferError("Source download access was denied; the URL may be unauthorized or expired. Reselect the file through the host adapter.", "SOURCE_ACCESS_DENIED");
+      if (response.status === 404 || response.status === 410) throw new BinaryTransferError("Source file reference is no longer available. Reselect the original file through the host adapter.", "SOURCE_NOT_FOUND");
       throw new BinaryTransferError("Binary source must return an uncompressed complete HTTP 200 file.", response.status !== 200 ? classifyBinaryFailure(new KDriveApiError("Source request failed", response.status)) : "BINARY_TRANSFER_FAILED");
     }
     return response;
   }
-  throw new BinaryTransferError("Binary source exceeded its redirect limit.");
+  throw new BinaryTransferError("Binary source exceeded its redirect limit.", "SOURCE_REDIRECT_LIMIT");
 }
 
 export function sourceSize(response: Response, expectedSize: number | undefined, maxBytes: number): number {
   const header = response.headers.get("content-length");
   const length = header !== null && /^\d+$/.test(header) ? Number(header) : undefined;
   const size = expectedSize ?? length;
+  if ((length !== undefined && length > maxBytes) || (size !== undefined && size > maxBytes)) throw new BinaryTransferError("Binary source exceeds the configured byte limit.", "SIZE_LIMIT_EXCEEDED");
   if (!Number.isSafeInteger(size) || size === undefined || size < 1 || size > maxBytes) {
-    throw new BinaryTransferError("Binary upload requires a positive Content-Length or expected_size within the configured limit.");
+    throw new BinaryTransferError("Binary upload requires a positive Content-Length or expected_size within the configured limit.", "SOURCE_SIZE_REQUIRED");
   }
-  if (length !== undefined && length !== size) throw new BinaryTransferError("Binary source size does not match expected_size.");
+  if (length !== undefined && length !== size) throw new BinaryTransferError("Binary source size does not match expected_size.", "INTEGRITY_MISMATCH");
   return size;
 }
 

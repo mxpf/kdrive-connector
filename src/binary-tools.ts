@@ -18,9 +18,9 @@ export interface BinaryToolConfig {
   buildOpenUrl: (file: KDriveFile) => Promise<string> | string;
 }
 
-// Exact host observed in a successful host-managed file transfer (2026-09-29).
+// Exact hosts observed in host-managed transfers (2026-09-29 and 2026-10-09).
 // Do not broaden this to all regional/shared-storage subdomains.
-export const DEFAULT_BINARY_SOURCE_HOSTS = ["files.oaiusercontent.com", "sandbox.openai.com", "sdmntprcentralus.oaiusercontent.com", "sdmntprnorthcentralus.oaiusercontent.com", "sdmntprsoutheastus3.oaiusercontent.com", "sdmntpreastus2.oaiusercontent.com", "oaisdmntprnorthcentralus.blob.core.windows.net"] as const;
+export const DEFAULT_BINARY_SOURCE_HOSTS = ["files.oaiusercontent.com", "sandbox.openai.com", "sdmntprcentralus.oaiusercontent.com", "sdmntprnorthcentralus.oaiusercontent.com", "sdmntprsoutheastus3.oaiusercontent.com", "sdmntpreastus2.oaiusercontent.com", "oaisdmntprnorthcentralus.blob.core.windows.net", "sdmntprbrazilsouth.oaiusercontent.com", "sdmntprsouthcentralus.oaiusercontent.com", "sdmntprwestus.oaiusercontent.com", "sdmntprnortheu.oaiusercontent.com"] as const;
 
 export async function uploadedBinaryResult(result: { file: KDriveFile; size_bytes: number; sha256: string }, path: string, buildOpenUrl: BinaryToolConfig["buildOpenUrl"]) {
   let openUrl: string | undefined;
@@ -50,9 +50,11 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
     } catch (error) {
       const code = binaryErrorCode(error);
       trace.complete(false, code);
-      const result = { error_code: code, trace_id: trace.traceId, stage: trace.stage,
+      // Hosts may normalize error_code to INVALID_ARGUMENT. Preserve the
+      // connector's classification under its own namespaced diagnostic key.
+      const result = { error_code: code, binary_error_code: code, trace_id: trace.traceId, stage: trace.stage,
         message: error instanceof BinaryTransferError ? error.message : "Binary transfer failed. No source credentials are included in this error. Check the destination before retrying an upload." };
-      return { isError: true, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+      return { isError: true, structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   };
   const upload = async (input: { path: string; source_url: string; expected_size?: number; expected_sha256?: string }, trace: ReturnType<typeof binaryTrace>) => {
@@ -114,8 +116,9 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
       trace.progress("reference", digest.size_bytes);
       return { ...await config.buildBinaryExport(file, versionId, { ...digest, trace_id: trace.traceId }) };
     });
-    if (!("structuredContent" in result) || !result.structuredContent) return result;
+    if (result.isError || !("structuredContent" in result) || !result.structuredContent) return result;
     const ref = result.structuredContent;
+    if (!("download_url" in ref)) return result;
     return { ...result, content: [...result.content, {
       type: "resource_link" as const, uri: ref.download_url, name: ref.file_name, mimeType: ref.mime_type,
       size: ref.size_bytes, description: "Raw bytes of the pinned kDrive version; expires in five minutes.",

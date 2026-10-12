@@ -121,8 +121,11 @@ running deployment and account plan were unchanged. See [Cloudflare CPU
 limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
 
 Do not remove checksum/version checks or increase inline/base64 limits to mask
-this failure. Options are an approved paid CPU budget followed by repeated
-near-limit integrity tests, or a separately implemented local direct-transfer
-path. The existing local materialization helper still downloads through this
-Worker and therefore does not bypass its CPU limit. See the [local-path
-distinction and connector limitations](../README.md#local-codex-transfer-existing-helper-versus-proposed-direct-path).
+this failure. Keep Cloudflare Free and use the
+[local direct-transfer CLI](../docs/local-transfer.md) for large files available
+on the local computer. It uploads, downloads, and verifies bytes directly against
+kDrive using local credentials. One 269 MB live round trip passed; the configured
+1 GiB ceiling is not a verified maximum. It does not require a Worker deployment
+or billing change. The older signed-reference materialization helper still
+downloads through this Worker and therefore does not bypass its CPU limit. See the [local-path
+distinction and connector limitations](../README.md#local-codex-transfer-direct-large-file-path).

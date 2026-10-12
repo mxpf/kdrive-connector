@@ -30,5 +30,13 @@ test("serialized MCP fileParam is an object; unresolved strings fail before prov
       assert.equal(result.isError, true);
     }
     assert.equal(calls, 0);
+    provider.resolvePath = async () => ({ id: 7, name: "Private", type: "dir" });
+    const denied = await client.callTool({ name: tool.name, arguments: { path: "/Private/fixture.png",
+      file_ref: { file_id: "file_fixture", download_url: "https://untrusted.example/file?sig=PRIVATE_SIGNATURE" } } });
+    assert.equal(denied.isError, true);
+    assert.equal(denied.structuredContent?.error_code, "SOURCE_HOST_DENIED");
+    assert.equal(denied.structuredContent?.binary_error_code, "SOURCE_HOST_DENIED");
+    assert.ok(!JSON.stringify(denied).includes("PRIVATE_SIGNATURE"));
+    assert.equal(calls, 0);
   } finally { await client.close(); await server.close(); }
 });

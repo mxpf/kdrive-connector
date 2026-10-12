@@ -21,13 +21,13 @@ const failureCases = [
   [0, "TRANSFER_TIMEOUT"],
 ] as const;
 
-for (const [status, code] of failureCases) test(`source boundary preserves ${code}`, async () => {
+for (const [status, code] of failureCases) test(`source boundary distinguishes source authorization for HTTP ${status}`, async () => {
   await assert.rejects(() => fetchBinarySource("https://trusted.example/private?token=SECRET", ["trusted.example"], new AbortController().signal,
     async () => {
       if (!status) throw new DOMException("SECRET", "TimeoutError");
       return new Response("SECRET", { status });
     }, async () => {}), (error: unknown) => {
-    assert.equal(classifyBinaryFailure(error), code);
+    assert.equal(classifyBinaryFailure(error), status === 401 ? "SOURCE_AUTHENTICATION_FAILED" : status === 403 ? "SOURCE_ACCESS_DENIED" : code);
     assert.doesNotMatch(String(error), /SECRET|https:/); return true;
   });
 });

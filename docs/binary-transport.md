@@ -1,5 +1,20 @@
 # Binary transport implementation notes
 
+The remote MCP binary tools and the local direct-transfer CLI share the kDrive
+client but use different transfer paths and limits. Keep Cloudflare Free; use
+the local CLI for large files available on the local computer.
+
+| Path | File bytes pass through | Size ceiling | Transfer deadline |
+| --- | --- | --- | --- |
+| Remote MCP binary tools | Cloudflare Worker | 100 MiB by default | 120 seconds |
+| Local signed-reference helper | Cloudflare Worker, then local file | Remote export limit | Subject to the remote deadline and CPU allowance |
+| Local `kdrive-transfer` CLI | Direct kDrive connection | 1 GiB | 30 minutes after initial credential loading |
+
+These are configured bounds, not verified reliable maxima. Remote 99 MiB
+download-backs failed with `exceededCpu`; one local 269 MB round trip passed.
+See the [dated acceptance record](binary-interop-acceptance.md) and
+[local transfer guide](local-transfer.md) for evidence and prerequisites.
+
 ## Contracts and sources
 
 - Native upload schema: [OpenAI file inputs](https://developers.openai.com/plugins/reference#define-file-inputs). `download_url` and `file_id` are required; `mime_type` and `file_name` are declared but optional. `_meta["openai/fileParams"]` names the top-level `file_ref` field.
@@ -92,7 +107,7 @@ The signed link is deliberately usable without the ChatGPT OAuth session by the 
 ## SSRF and limits
 
 - HTTPS only, default port only, no URL userinfo or fragments. Reject all literal IP addresses, localhost/internal host forms, private/link-local/metadata destinations, and unapproved domains.
-- `KDRIVE_BINARY_SOURCE_HOSTS` is a comma-separated **exact trusted-host allowlist**, defaulting to `files.oaiusercontent.com,sandbox.openai.com,sdmntprcentralus.oaiusercontent.com,sdmntprnorthcentralus.oaiusercontent.com,sdmntprsoutheastus3.oaiusercontent.com,sdmntpreastus2.oaiusercontent.com,oaisdmntprnorthcentralus.blob.core.windows.net`. These hosts were observed in native transfers and individually DNS/TLS checked. This is not proof that every ChatGPT upload uses these hosts. Redirect targets must also be approved. Add only verified file-provider hostnames from actual host-issued references. No `*.blob.core.windows.net` or other shared-domain wildcard. Other hosts fail closed; do not broaden automatically.
+- `KDRIVE_BINARY_SOURCE_HOSTS` is a comma-separated **exact trusted-host allowlist**. The current defaults are recorded in [`DEFAULT_BINARY_SOURCE_HOSTS`](../src/binary-tools.ts) and the [Worker configuration](../remote/wrangler.jsonc), including the four additional regions recorded on October 9 below. The observed hosts were individually DNS/TLS checked; this is not proof that every ChatGPT upload uses them. Redirect targets must also be approved. Add only verified file-provider hostnames from actual host-issued references. No `*.blob.core.windows.net` or other shared-domain wildcard. Other hosts fail closed; do not broaden automatically.
 - Public A/AAAA checks run for every hop, in addition to the allowlist. DNS preflight is not address pinning: an administrator must never approve attacker-controlled/rebinding DNS or a host exposing an internal proxy. The portable Workers fetch API does not provide a pinned-address dialer. Arbitrary-public-URL support would require a hardened egress proxy; it is intentionally not claimed here.
 - Single-stack hosts are supported: an absent family may report `ENODATA` in Node or `ENOTFOUND` in workerd. At least one address must still resolve, every returned address must be public, and all other DNS failures (including timeouts) fail closed. A credential-free workerd probe reproduced public A records plus `ENOTFOUND` for absent AAAA records on the kDrive download CDN.
 - Workerd can also include CNAME alias strings in `resolve4`/`resolve6` results. Valid DNS names are excluded from IP classification; at least one terminal IP is still required and every actual IP must be public. Alias-only, malformed, mixed-private and private results are rejected.
@@ -106,7 +121,7 @@ Remote exports require the HTTPS Worker endpoint. Stdio exposes the export tool 
 
 For observed live outcomes, use the [dated acceptance record](binary-interop-acceptance.md): Codex → Acrobat and a generated PNG → kDrive → independent export/hash round trip passed through the host adapter. Direct ChatGPT → Acrobat remains blocked; the earlier EPUB failure has not been separately retested. The checklist below describes required coverage, not completed results.
 
-`npm test` runs without credentials. Contract tests cover the requested PDF path against mock provider responses, raw HTTP handoff, a locally generated ~500 KB EPUB ZIP round trip, 50 MiB lazy-stream upload with measured bounded read-ahead, digest/size mismatches, failed chunks, version drift, signed-link scoping/expiry/tampering, redirects, size caps, and forbidden URLs. The EPUB contains an uncompressed mimetype entry, container, package, navigation and XHTML chapter; this tests transport, not a third-party EPUB conformance validator or ChatGPT generation. A PDF-shaped fixture tests raw delivery, **not live Acrobat extraction**. Worker tests exercise streaming/hash code in workerd.
+`npm test` runs without credentials. Contract tests cover the requested PDF path against mock provider responses, raw HTTP handoff, a locally generated ~500 KB EPUB ZIP round trip, 99 MiB lazy-stream upload with measured bounded read-ahead, digest/size mismatches, failed chunks, version drift, signed-link scoping/expiry/tampering, redirects, size caps, and forbidden URLs. The EPUB contains an uncompressed mimetype entry, container, package, navigation and XHTML chapter; this tests transport, not a third-party EPUB conformance validator or ChatGPT generation. A PDF-shaped fixture tests raw delivery, **not live Acrobat extraction**. Worker tests exercise streaming/hash code in workerd. Local CLI tests additionally cover a 269 MB synthetic stream, private snapshots/downloads, independent readback, cancellation cleanup, and committed-but-unverified receipts.
 
 Live acceptance remains a release gate; do not mark it passed from unit tests:
 
@@ -120,6 +135,47 @@ Live acceptance remains a release gate; do not mark it passed from unit tests:
 No live uploads, private PDF disclosures to downstream tools, deployment, or plugin refresh are performed by the automated suite.
 
 ## File-parameter investigation (2026-10-01)
+
+### Follow-up: generated-file source regions (2026-10-09)
+
+A local generated SVG passed through Codex's native file adapter reached the
+connector as an HTTPS file object, then failed with `SOURCE_HOST_DENIED`, trace
+`532038f4-bd94-4dac-b41b-7654c109f243`. The adapter supplied the previously
+unlisted exact host `sdmntprbrazilsouth.oaiusercontent.com`. The user-provided
+MXPF shared conversation's manifest download also served valid JSON from
+`sdmntprsouthcentralus.oaiusercontent.com`. Defaults and Worker configuration
+now include these observed exact hosts, plus `sdmntprwestus.oaiusercontent.com`
+observed on the subsequent native SVG retry (trace
+`2ef9cc27-dd8a-4192-a1a7-e224ad2f1911`) and `sdmntprnortheu.oaiusercontent.com`
+(trace `603cc0d8-71c5-4266-a3b5-6eaf5d1efced`). The host can choose a different
+region for each native upload, including retries of the same file. Future unobserved hosts still
+fail closed; this is not a claim that every ChatGPT storage region is supported.
+
+[OpenAI's file-input contract](https://developers.openai.com/plugins/reference#file-apis)
+requires an object with required `download_url`/`file_id` and optional declared
+`mime_type`/`file_name`, plus `openai/fileParams`. The server already implements
+that contract; the model-facing string is the host adapter's selection input.
+Passing the wrong representation at either layer is a separate failure. Native
+Library selection requires host-granted access: the connector cannot enumerate
+or resolve Library folder names, private local paths, or bare file IDs. Library
+files must be selected/attached using the host's supported mechanism. No API key,
+public intermediary storage, or new OAuth permission is required for an already
+authorized native file object from an approved host.
+
+Binary errors now include matching structured/text diagnostic codes, including
+`binary_error_code`: the live host normalized `error_code` to `INVALID_ARGUMENT`
+even when the server supplied the specific code. Known
+SAS `se` expiry is reported as `SOURCE_URL_EXPIRED` before fetching; it is not
+used to authorize anything. HTTP 401/403 are source authentication/access errors,
+not proof of expiry. HTTP 404/410 are unavailable source references. Size limits,
+missing length, integrity mismatch, and pre-finalization HTTP 409 conflicts have
+distinct codes. Uncertain finalization still takes precedence: inspect the
+destination before retrying. Signed URLs and source response bodies are never
+included in these errors. Source credential headers are not forwarded; redirects
+remain manual, limited to three, with host/DNS validation on every hop. Hash and
+length are checked before finalization; `conflict: error` prevents replacement or
+automatic duplicate renaming. Verify destination bytes separately before claiming
+archive completion.
 
 The raw MCP declaration already uses an object with `download_url`, `file_id`, optional `mime_type`/`file_name`, and `_meta["openai/fileParams"]: ["file_ref"]`, matching OpenAI's linked file-input contract. Node and Worker discovery regression tests now verify the **serialized `tools/list` response**, not just registration-time Zod objects. Direct MCP string arguments fail schema validation before any provider request.
 
@@ -156,7 +212,29 @@ After `npm run build`, feed raw reference JSON to `node dist/download-cli.js` th
 The endpoint returns HTTP 410 for invalid/expired/unavailable references. Refresh with `kdrive_export_file` and compare `resolved_version` before resuming a task. It currently advertises `Accept-Ranges: none`; range/chunk retrieval and server-side OCR are intentionally deferred, not silently approximated. Full-stream integrity checks remain in place. OCR/extraction belongs to a downstream PDF tool in this patch.
 
 Transport integration tests exercise lazy 25 MiB PDF-shaped data, image/EPUB/Office/archive payloads, Unicode/space-containing names, expiry/refresh, corruption, truncation and cancellation. These are byte-transport fixtures, not document-format validation. Live evidence uses the actual 27002376-byte *Wisdom of Laotse* PDF, which downloads with the correct digest and opens/renders in Poppler. Acrobat's generic processing error remains unresolved.
-# Reliability diagnostics
+
+## Local direct-transfer implementation
+
+`src/local-transfer.ts` provides upload, download, and verification operations;
+`src/transfer-cli.ts` is the local command entrypoint. It does not use the Worker
+export endpoint or digest cache. Uploads snapshot a nonempty regular local file,
+validate any supplied size/hash, and use the shared conflict-safe upload session.
+After finalization, verification resolves the destination, requires the committed
+file ID, and hashes a fresh direct-provider stream against the snapshot.
+
+Downloads require a stable current ETag and size before and after streaming.
+They return a private local file only after those checks and any supplied
+checksum comparison pass. The local `version_id` is the checked current ETag,
+not a promise of retained historical bytes. A computed checksum without an
+expected digest is not independent proof of source identity.
+
+The CLI emits sanitized metadata or an error code. `UPLOADED_NOT_VERIFIED`
+includes a receipt for a committed file; `UPLOAD_COMMIT_UNKNOWN` requires
+destination inspection. Neither outcome should trigger an automatic re-upload.
+See [local transfer setup and recovery](local-transfer.md) for commands,
+credential boundaries, cleanup behavior, and the live verification record.
+
+## Reliability diagnostics
 
 `kdrive_connection_status` includes an additive `connector` object: package version,
 running Worker deployment ID (`build_id`), capability revision, supported transports,

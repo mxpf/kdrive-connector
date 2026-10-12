@@ -16,9 +16,9 @@ server performs exact API operations.
 
 ## Advantages and current limitations
 
-**Last verified: 2026-10-09.** The connector is useful for everyday kDrive work,
+**Evidence updated: 2026-10-11.** The connector is useful for everyday kDrive work,
 but it is not yet a universally reliable large-file bridge between AI tools.
-These are deployment observations, not guarantees for every host or account.
+These are recorded observations, not guarantees for every host or account.
 
 | Area | Advantage | Boundary |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ These are deployment observations, not guarantees for every host or account.
 | Presentation | Rich cards and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
 | Binary uploads | Native host file adapter, bounded streaming, checksums, no base64 in model context | Host must resolve the file; exact source-host allowlist can reject newly selected regions |
 | Binary exports | Short-lived raw-byte references, pinned version, size and SHA-256 | Downstream tools must support that reference or an explicit import bridge |
+| Local large-file transfers | Direct kDrive upload/download with independent SHA-256 verification, bypassing the Worker | Local credentials and files required; 1 GiB ceiling, with one live 269 MB round trip verified |
 
 Live checks passed for synthetic PNG, SVG, PDF, ZIP-format, and Markdown files,
 including independent download/hash comparisons. A 99 MiB upload also completed
@@ -42,6 +43,13 @@ configured 100 MiB binary ceiling is a safety limit, **not a promise of reliable
 Cloudflare rejected an attempted configurable CPU budget because it requires
 Workers Paid; no account upgrade was performed. See the official
 [CPU limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
+
+For large files available to local Codex, use the
+[direct-transfer CLI](#local-codex-transfer-direct-large-file-path). It keeps
+Cloudflare Free and sends file bytes directly between this computer and kDrive.
+The recorded October 11 test verified a 269,000,000-byte upload and download,
+including SHA-256 and byte-for-byte comparison. The 1 GiB local ceiling has not
+been live-tested. This result does not change the remote Worker's limitations.
 
 ChatGPT Library folder names and shared conversation links are not automatically
 downloadable file references. Files must be made available through a supported
@@ -126,6 +134,10 @@ definitions, workflow instructions, and safety rules:
   verifies the connecting user, an allowlist limits access to the owner, and the
   Infomaniak token stays in Cloudflare's encrypted secret store.
 
+The root package also includes a local `kdrive-transfer` CLI using the shared
+kDrive client. It transfers bytes directly with local authentication and does
+not add a remote MCP tool or require a Worker deployment.
+
 ```text
 ChatGPT Work ── MCP OAuth 2.1 ──> Cloudflare Worker ── server-side token ──> kDrive API
                                       │
@@ -145,7 +157,8 @@ npm run build
 npm test
 ```
 
-Node.js 20 or newer is required.
+Node.js 20 or newer is required for the server. Use Node.js 20.19+ for
+`npm run transfer`, which uses the optional env-file flag.
 
 ### 2. Configure the drive
 
@@ -295,33 +308,62 @@ restarts; local stdio uses a per-registration in-memory cache. Each export still
 checks current access and version; each download still verifies the version,
 length, and SHA-256. First-time exports are unchanged.
 
-### Local Codex transfer: existing helper versus proposed direct path
+### Local Codex transfer: direct large-file path
 
-**Available now:** the Node materialization helper downloads a signed export
+**Signed-reference helper:** the Node materialization helper downloads a signed export
 through the remote Worker, writes to a private temporary file, and checks size
 and SHA-256 before returning its local path. Codex can pass that path to a tool
 whose native adapter explicitly accepts local files. This avoids binary data in
 model context, but **still depends on the Worker's download CPU budget**.
 
-**Proposed, not implemented as a complete transfer workflow:** a local transfer
-command would use the shared kDrive client and locally protected credentials to
-stream directly between kDrive and a temporary local file. It would pin/check the
-source version, verify size and SHA-256, and return only a local handle and
-metadata. Uploads would use conflict-safe sessions and verify the destination.
-Sensitive replacements would retain the existing prepare/change safeguards.
+**Direct path:** `kdrive-transfer` uses the shared kDrive client and existing local
+credentials to bypass the Worker entirely. It supports uploads, downloads, and
+independent verification, with a separate **1 GiB local ceiling** and **30-minute
+deadline**. These are safety bounds, not a guarantee of throughput. Cloudflare
+Free, remote tool schemas, and remote transfer limits remain unchanged.
+
+Build once with `npm run build`, then use:
+
+```bash
+npm run transfer -- upload --source "/absolute/local/archive.zip" --path "/Private/00 Inbox/archive.zip"
+npm run transfer -- download --path "/Private/00 Inbox/archive.zip"
+npm run transfer -- verify --path "/Private/00 Inbox/archive.zip" --size 269000000 --sha256 "<source-sha256>"
+```
+
+The destination parent must already exist. Uploads stream a private local snapshot
+into conflict-safe kDrive sessions, then independently download the committed
+file ID, checking its version, full byte length, and SHA-256 against that snapshot.
+Existing destinations are never overwritten or automatically renamed. There are
+no automatic retries. `UPLOADED_NOT_VERIFIED` returns a receipt for an existing
+upload that needs verification; `UPLOAD_COMMIT_UNKNOWN` means inspect the
+destination before attempting anything else. Never delete the source on either
+outcome. Replacements are deliberately not supported by this command.
+
+Downloads stream into a private temporary directory and return `local_path`,
+filename, MIME type, size, SHA-256, and version. Supply `--sha256` and optionally
+`--size` to compare with a trusted source manifest. Without an expected checksum,
+the download computes a checksum and checks size/version, but cannot establish
+identity against an independent source digest. Partial downloads and upload
+snapshots are removed on handled failure/cancellation; successful downloads are
+kept for downstream tools and explicit cleanup. Forced process termination or
+power loss can leave private temporary directories behind.
+
+See [local transfer setup, safety, and verification](docs/local-transfer.md).
+The [dated acceptance record](docs/binary-interop-acceptance.md#local-direct-transfer--2026-10-11)
+summarizes the successful 269 MB live round trip and its limits.
 
 ```text
 kDrive API <-> local authenticated transfer + checksum verification
                           <-> local file <-> supported Codex tool adapter
 ```
 
-This would remove Cloudflare from the binary data path, not remove security
-checks. It would require your computer and local runtime to be available,
-explicit local kDrive credential setup, disk space, cancellation/cleanup rules,
-and end-to-end tests. Remote Worker secrets must not be exported to the model.
+This removes Cloudflare from the binary data path, not security checks. It
+requires your computer and local runtime to be available, existing or explicitly
+authorized local kDrive credentials, and disk space for a full source snapshot or
+download. Remote Worker secrets must not be exported to the model.
 Passing a file to another tool may upload it to that tool's service; local
 materialization does not mean all downstream processing stays on the computer.
-It would not grant access to unselected ChatGPT Library files or make a local
+It does not grant access to unselected ChatGPT Library files or make a local
 path usable by a remote ChatGPT-only runtime.
 
 ## Development checks
@@ -330,9 +372,15 @@ path usable by a remote ChatGPT-only runtime.
 npm run check
 npm test
 npm run build
-cd remote && npm ci && npm run type-check
+npm --prefix remote ci
+npm --prefix remote run type-check
+npm --prefix remote test
 ```
 
 The automated tests use local mock HTTP responses. Live kDrive calls require
 your Infomaniak credentials and are intentionally not run during the normal
 test suite.
+
+On October 11, the recovered implementation passed 141 root tests, 21 Worker
+tests, both type checks, and the root build on Yantra. These local checks did not
+repeat the earlier live transfer or establish local authentication on Yantra.

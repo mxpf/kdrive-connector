@@ -82,8 +82,8 @@ test("500 KB generated artifact uploads and exports with identical bytes and dig
   assert.equal(returned.length, ref.size_bytes);
 });
 
-test("50 MiB streams incrementally with backpressure, never as a full-file buffer", async () => {
-  const size = 50 * 1024 * 1024;
+test("99 MiB streams incrementally with backpressure, never as a full-file buffer", async () => {
+  const size = 99 * 1024 * 1024;
   let generated = 0;
   let uploaded = 0;
   let calls = 0;
@@ -109,7 +109,7 @@ test("50 MiB streams incrementally with backpressure, never as a full-file buffe
   };
   const client = new KDriveClient(config, { getAccessToken: async () => "token" }, fakeFetch);
   const result = await client.uploadBinary(42, { body, size, fileName: "large.bin", directoryId: 7, signal: deadline() });
-  assert.equal(calls, 13);
+  assert.equal(calls, 25);
   assert.ok(maxAhead <= BINARY_CHUNK_BYTES + 65536, `Read ahead ${maxAhead} bytes`);
   assert.equal(result.sha256, sourceHash.digest("hex"));
   assert.equal(result.sha256, uploadHash.digest("hex"));
