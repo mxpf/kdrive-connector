@@ -82,34 +82,49 @@ test('encrypted PDF renders only with correct password and does not expose it in
   assert.ok(!JSON.stringify(result).includes('synthetic-open-password'));
 });
 
-test('model adapter sends only rendered bytes and forwards cancellation, rejects incomplete/oversized responses', async () => {
+const completion = (content: unknown, finish_reason: unknown = 'stop', extra = {}) => ({
+  choices:[{message:{role:'assistant',content,...extra},finish_reason}],
+});
+
+test('vision adapter sends only rendered bytes and forwards cancellation, with bounded Free inference', async () => {
   const signal = new AbortController().signal;
   let calls = 0;
   const provider = cloudflareOcrProvider({ run: async (model, input, options) => {
     calls++;
     assert.equal(model, PDF_OCR_MODEL); assert.equal(options?.signal,signal);
-    assert.equal(input.image,'data:image/png;base64,AQID');
-    assert.equal(input.reasoning,false); assert.equal(input.stream,false);
-    assert.equal(input.max_tokens,4096);
-    assert.ok(!('password' in input)); assert.ok(!('url' in input));
-    return { answer:' SYNTHETIC ', finish_reason:'stop' };
+    const messages=input.messages as any[];
+    assert.equal(messages.length,2);
+    assert.equal(messages[0].role,'system');
+    assert.match(messages[0].content,/colored box background does not mean/);
+    assert.deepEqual(messages[1],{role:'user',content:[{type:'image_url',image_url:{url:'data:image/png;base64,AQID'}}]});
+    assert.equal(input.reasoning_effort,'low');
+    assert.deepEqual(input.chat_template_kwargs,{enable_thinking:false});
+    assert.equal(input.stream,false);assert.equal(input.store,false);
+    assert.equal(input.max_completion_tokens,4096);
+    assert.ok(!('password' in input));assert.ok(!('tools' in input));assert.ok(!('gateway' in input));
+    return completion(' SYNTHETIC ', 'stop', {reasoning:'PRIVATE REASONING'});
   } });
   assert.equal(await provider.recognize(new Uint8Array([1,2,3]),signal),'SYNTHETIC');
   assert.equal(calls,1);
-  for (const result of [{answer:'partial',finish_reason:'length'},{answer:'unknown'},{answer:'unknown',finish_reason:'future_reason'},{answer:'unknown',finish_reason:'eos'},{answer:'unknown',finish_reason:'end_turn'}]) {
-    await assert.rejects(cloudflareOcrProvider({run:async()=>result}).recognize(new Uint8Array(),signal),code('PDF_OCR_INCOMPLETE'));
-  }
-  await assert.rejects(cloudflareOcrProvider({run:async()=>({answer:'x'.repeat(30001),finish_reason:'stop'})}).recognize(new Uint8Array(),signal),code('PDF_OCR_OUTPUT_LIMIT'));
 });
 
-test('model adapter accepts the live Cloudflare envelope and validates its completion', async () => {
-  const signal = new AbortController().signal;
-  assert.equal(await cloudflareOcrProvider({run:async()=>({
-    result:{answer:'LIVE ENVELOPE SHAPE',finish_reason:'stop',caption:null,reasoning:null},
-    usage:{prompt_tokens:789,completion_tokens:95,neurons:30.1545467376709},
-  })}).recognize(new Uint8Array([1]),signal),'LIVE ENVELOPE SHAPE');
-  await assert.rejects(cloudflareOcrProvider({run:async()=>({result:{answer:'partial',finish_reason:'length'}})}).recognize(new Uint8Array(),signal),code('PDF_OCR_INCOMPLETE'));
-  await assert.rejects(cloudflareOcrProvider({run:async()=>({result:null})}).recognize(new Uint8Array(),signal),code('PDF_OCR_FAILED'));
+test('vision adapter validates choices, normal completion and text-only output before returning a transcription',async()=>{
+  const signal=new AbortController().signal;
+  const recognize=(result:unknown)=>cloudflareOcrProvider({run:async()=>result}).recognize(new Uint8Array(),signal);
+  assert.equal(await recognize(completion('direct')),'direct');
+  assert.equal(await recognize({result:completion('wrapped'),usage:{neurons:33}}),'wrapped');
+  assert.equal(await recognize(completion('')),'');
+  for(const reason of ['length','tool_calls','content_filter','future_reason',null]) {
+    await assert.rejects(recognize(completion('partial',reason)),code('PDF_OCR_INCOMPLETE'));
+  }
+  await assert.rejects(recognize({choices:[{message:{role:'assistant',content:'partial'}}]}),code('PDF_OCR_INCOMPLETE'));
+  for(const result of [{choices:[]},{choices:[{},{}]},{choices:null},{result:null},
+    completion(null),completion('not an answer','stop',{role:'user'}),
+    completion('refused','stop',{refusal:'no'}),completion('tool','stop',{tool_calls:[{}]}),
+    completion('tool','stop',{tool_calls:{}}),completion('tool','stop',{function_call:{}})]) {
+    await assert.rejects(recognize(result),code('PDF_OCR_FAILED'));
+  }
+  await assert.rejects(recognize(completion('x'.repeat(30001))),code('PDF_OCR_OUTPUT_LIMIT'));
 });
 
 test('OCR failure and deadline return safe errors, never retry or leak provider details', async () => {

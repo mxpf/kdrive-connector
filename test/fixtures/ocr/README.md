@@ -1,12 +1,14 @@
 # Synthetic OCR acceptance set
 
-`generate.py` creates ten **fabricated** one-page PDFs plus a manifest of known
+`generate.py` creates fifteen **fabricated** one-page PDFs plus a manifest of known
 text and form values: scan, rotated scan, mixed raster/text, 7-point small print,
 German/French text, interactive form, AES-256 encrypted scan, two independent
 image-rotated scans, and a small-text region on an off-white background. It does
-not read user documents. Generated files are test intermediates, kept outside Git.
+not read user documents. Checkbox variants cover reversed states, all-empty,
+all-checked, a flattened scan and deliberately inconsistent raw storage. Generated files are test intermediates, kept outside Git.
 
-Use a Python environment containing ReportLab, Pillow and pypdf[crypto]:
+Use a Python environment containing ReportLab, Pillow and pypdf[crypto], plus
+Poppler `pdftoppm` for independently rasterizing the flattened form:
 
 ```sh
 python3 test/fixtures/ocr/generate.py /tmp/kdrive-synthetic-ocr-acceptance
@@ -27,7 +29,7 @@ node --import tsx scripts/validate-pdf-ocr.ts \
   --live --free-plan-verified --account ACCOUNT_ID
 ```
 
-The runner sends at most ten synthetic page images directly to Cloudflare's
+The runner sends at most fifteen synthetic page images directly to Cloudflare's
 Workers AI REST API using the production renderer and model adapter. It stops
 at the first access/contract failure and never retries automatically. Credentials
 are obtained from Wrangler into memory and are not written to the report.
@@ -55,14 +57,23 @@ and rejects all three cases. OCR remains disabled and undeployed.
 The follow-up adds conservative white-margin removal and explicit rotation/region
 options. Region coordinates use fractions of the displayed page before clockwise
 correction; generated fixture options are included in the report. Regenerate the
-set to get all ten cases. The runner rejects incomplete manifests.
+set to get all fifteen cases. The runner rejects incomplete manifests.
 
 Use `--case forms` (or another exact fixture name) for a bounded diagnostic; its
 report is `live-forms.json`, and its `scope` identifies the subset. A subset pass
-is not full-suite acceptance. The default still runs all ten once, without
+is not full-suite acceptance. The default still runs all fifteen once, without
 retries. Reports include the production transcription prompt for reproducibility.
 
 [Final follow-up evidence](../../../docs/evidence/ocr-preprocessing-2026-10-13.md)
 matched nine cases, including corrected orientations and small print. General
-visual form marks remain a failed release gate. Local replay tests retain that
-failure; they do not turn it into a live accuracy pass.
+visual form marks remained a failed release gate for that revision. Local replay
+tests retain that failure; they do not turn it into a live accuracy pass.
+
+The current model is Qwen 3.8 27B, using one bounded vision call per case.
+[Checkbox follow-up](../../../docs/evidence/ocr-checkbox-2026-10-13.md) records
+all fifteen cases passing in the final live run, plus earlier timeout failures.
+Checkbox parser states must have explicit source/review markers;
+text/choice fields must remain consistent stored values. For `forms-stale`,
+pypdf independently checks raw `/V`, while the connector warns that its checkbox
+states are normalized from `/AS`. A successful visual transcription must follow
+the rendered marks, not substitute the raw values or parser output.

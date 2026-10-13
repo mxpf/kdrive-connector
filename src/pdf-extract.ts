@@ -3,7 +3,7 @@
 // remains the final backstop for malicious compressed PDFs.
 import { extractFormFields, type PdfFormField } from "./pdf-forms.js";
 import { validOcrImageOptions, type PdfOcrImageOptions } from "./pdf-ocr-image.js";
-export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, fieldsPerCall: 500, timeoutMs: 20_000 } as const;
+export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, fieldsPerCall: 500, timeoutMs: 20_000, ocrTimeoutMs: 45_000 } as const;
 
 export class PdfReadError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "PdfReadError"; }
@@ -85,10 +85,11 @@ export async function extractPdf(bytes: Uint8Array, options: PdfReadOptions = {}
       totalPages: pdf.numPages, startPage, endPage, pages,
       hasMore: endPage < pdf.numPages, nextPage: endPage < pdf.numPages ? endPage + 1 : null,
       extraction: "pdf_text_layer" as const,
-      forms: { source: "acroform_stored_values" as const, xfaPresent, appearanceVerified: false, scope: "widgets_on_selected_pages" as const },
+      forms: { source: "acroform_parsed_values" as const, checkboxValues: "pdfjs_normalized_appearance_state" as const, xfaPresent, appearanceVerified: false, scope: "widgets_on_selected_pages" as const },
       warnings: [
         "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
-        "Form values are stored PDF values, not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+        "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+        "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
         ...(xfaPresent ? ["XFA forms are unsupported; AcroForm values may be incomplete or stale. Review the rendered page using OCR or a PDF viewer."] : []),
         ...(pages.some(p => p.status === "no_text") ? ["Some selected pages contain no extractable text. They may be blank or require OCR; no OCR was performed."] : []),
       ],

@@ -1,9 +1,10 @@
-// PDF.js resolves inherited /V entries. Cross-check page widgets against the
-// AcroForm tree; never promote orphan or contradictory widgets to verified data.
+// PDF.js resolves inherited /V entries, but normalizes checkbox values from /AS.
+// Its tree and widget views are NOT independent evidence of a checkbox's raw /V.
 export type FormValue = string | string[] | number | boolean | null;
 export interface PdfFormField {
   name: string; type: string; value: FormValue; status: "stored_value" | "review_required" | "redacted";
   checked?: boolean; exportValue?: string; issues: string[];
+  valueSource?: "pdfjs_checkbox_state";
 }
 const scalar = (v: unknown): FormValue => v == null ? null : typeof v === "string" || typeof v === "boolean" || typeof v === "number" ? v
   : Array.isArray(v) && v.every(x => typeof x === "string") ? v : null;
@@ -39,6 +40,10 @@ export function extractFormFields(annotations: any[], tree: Record<string, any[]
       status: password ? "redacted" : issues.length ? "review_required" : "stored_value", issues,
     };
     if (password) field.issues.push("PASSWORD_FIELD_REDACTED");
+    if (widget.checkBox && !password) {
+      field.valueSource = "pdfjs_checkbox_state";
+      issues.push("CHECKBOX_RAW_VALUE_UNVERIFIED");
+    }
     if ((widget.checkBox || widget.radioButton) && typeof value === "string") {
       const exportValue = widget.exportValue ?? widget.buttonValue;
       if (typeof exportValue === "string") { field.exportValue = exportValue; field.checked = value === exportValue && value !== "Off"; }

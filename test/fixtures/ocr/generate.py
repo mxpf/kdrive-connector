@@ -1,8 +1,8 @@
 """Build only fabricated OCR acceptance fixtures; no user files are accepted.
 Usage: python generate.py /absolute/output/directory
-Requires reportlab, Pillow, pypdf[crypto].
+Requires reportlab, Pillow, pypdf[crypto] and Poppler pdftoppm.
 """
-import io, json, sys
+import io, json, sys, subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
@@ -48,22 +48,51 @@ make('mixed',base,mixed=True)
 make('small-print',base+['Small print: 0.01  1,001.10  10,010.01  -42.50'],small=True)
 make('multilingual',['SYNTHETIC OCR TEST - FICTIONAL VALUES','Name: Anna Müller','Reçu: déjà payé','Betrag: 1.234,56 EUR','Référence: ÉTÉ-2025'])
 # Real widgets, with generated appearance streams and independent /V checks.
-dest=out/'forms.pdf'
-c=canvas.Canvas(str(dest), pagesize=(612,792), invariant=True)
-c.setFont('Helvetica',14);c.drawString(54,740,'SYNTHETIC FORM - FICTIONAL VALUES')
-f=c.acroForm
-for name,label,value,y in [('entity','Entity','CEDAR TEST LLC',680),('amount','Gross amount','12345.67',630)]:
-    c.setFont('Helvetica',11);c.drawString(54,y+6,label)
-    f.textfield(name=name,value=value,x=170,y=y,width=250,height=26,fontSize=12)
-f.checkbox(name='resident',checked=True,x=54,y=580,buttonStyle='check');c.drawString(82,585,'Resident')
-f.checkbox(name='nonresident',checked=False,x=210,y=580,buttonStyle='check');c.drawString(238,585,'Nonresident')
-f.choice(name='category',value='Business',options=['Personal','Business'],x=170,y=520,width=200,height=26)
-c.drawString(54,528,'Category')
-c.showPage();c.save()
-fields=PdfReader(dest).get_fields()
-expected_fields={'entity':'CEDAR TEST LLC','amount':'12345.67','resident':'/Yes','nonresident':'/Off','category':'Business'}
-assert all(str(fields[k]['/V'])==v for k,v in expected_fields.items())
-manifest.append({'name':'forms','file':dest.name,'expected':['SYNTHETIC FORM','CEDAR TEST LLC','12345.67','[X] Resident','[ ] Nonresident','Business'],'fields':expected_fields,'kind':'form'})
+def make_form(fixture_name, resident=True, nonresident=False):
+    dest=out/f'{fixture_name}.pdf'
+    c=canvas.Canvas(str(dest), pagesize=(612,792), invariant=True)
+    c.setFont('Helvetica',14);c.drawString(54,740,'SYNTHETIC FORM - FICTIONAL VALUES')
+    f=c.acroForm
+    for name,label,value,y in [('entity','Entity','CEDAR TEST LLC',680),('amount','Gross amount','12345.67',630)]:
+        c.setFont('Helvetica',11);c.drawString(54,y+6,label)
+        f.textfield(name=name,value=value,x=170,y=y,width=250,height=26,fontSize=12)
+    f.checkbox(name='resident',checked=resident,x=54,y=580,buttonStyle='check');c.drawString(82,585,'Resident')
+    f.checkbox(name='nonresident',checked=nonresident,x=210,y=580,buttonStyle='check');c.drawString(238,585,'Nonresident')
+    f.choice(name='category',value='Business',options=['Personal','Business'],x=170,y=520,width=200,height=26)
+    c.drawString(54,528,'Category')
+    c.showPage();c.save()
+    fields=PdfReader(dest).get_fields()
+    expected_fields={'entity':'CEDAR TEST LLC','amount':'12345.67','resident':'/Yes' if resident else '/Off','nonresident':'/Yes' if nonresident else '/Off','category':'Business'}
+    assert all(str(fields[k]['/V'])==v for k,v in expected_fields.items())
+    manifest.append({'name':fixture_name,'file':dest.name,'expected':['SYNTHETIC FORM','CEDAR TEST LLC','12345.67',('[X]' if resident else '[ ]')+' Resident',('[X]' if nonresident else '[ ]')+' Nonresident','Business'],'fields':expected_fields,'checkboxStates':{'resident':resident,'nonresident':nonresident},'kind':'form'})
+make_form('forms')
+make_form('forms-reversed',False,True)
+make_form('forms-empty',False,False)
+make_form('forms-both',True,True)
+
+# Rasterize with independent Poppler; remove ALL stored fields by rebuilding an
+# image-only PDF. The vision model must read marks, not infer states from fields.
+subprocess.run(['pdftoppm','-r','144','-f','1','-singlefile','-png',str(out/'forms.pdf'),str(out/'forms-flattened')],check=True)
+c=canvas.Canvas(str(out/'forms-flattened.pdf'),pagesize=(612,792),invariant=True)
+c.drawImage(str(out/'forms-flattened.png'),0,0,width=612,height=792);c.showPage();c.save()
+assert not PdfReader(out/'forms-flattened.pdf').get_fields()
+manifest.append({'name':'forms-flattened','file':'forms-flattened.pdf','expected':next(f['expected'] for f in manifest if f['name']=='forms'),'kind':'scan','expectNoFields':True})
+
+# Deliberately disagreeing /V and /AS: stored states are reversed, appearances
+# unchanged. This detects accidental laundering of stored data into visual OCR.
+from pypdf.generic import NameObject
+writer=PdfWriter();writer.clone_document_from_reader(PdfReader(out/'forms.pdf'))
+for ref in writer.pages[0]['/Annots']:
+    widget=ref.get_object()
+    if widget.get('/T')=='resident': widget[NameObject('/V')]=NameObject('/Off')
+    if widget.get('/T')=='nonresident': widget[NameObject('/V')]=NameObject('/Yes')
+writer.write(out/'forms-stale.pdf')
+stale_fields=PdfReader(out/'forms-stale.pdf').get_fields()
+assert str(stale_fields['resident']['/V'])=='/Off' and str(stale_fields['nonresident']['/V'])=='/Yes'
+original=next(f for f in manifest if f['name']=='forms')
+manifest.append({'name':'forms-stale','file':'forms-stale.pdf','expected':original['expected'],
+                 'fields':original['fields'],'checkboxStates':original['checkboxStates'],
+                 'rawCheckboxValues':{'resident':'/Off','nonresident':'/Yes'},'kind':'stale-form'})
 writer=PdfWriter();writer.clone_document_from_reader(PdfReader(out/'scan.pdf'))
 writer.encrypt('synthetic-open-password', owner_password='synthetic-owner-password', algorithm='AES-256')
 writer.write(out/'encrypted-scan.pdf')

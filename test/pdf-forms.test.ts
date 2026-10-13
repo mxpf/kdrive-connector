@@ -39,6 +39,8 @@ test('real PDF parser extracts inherited values, choices, checkbox/radio selecti
   assert.equal(field('person').status, 'stored_value');
   assert.deepEqual(field('choices').value, ['A', 'C']);
   assert.equal(field('checked').checked, true);
+  assert.equal(field('checked').valueSource,'pdfjs_checkbox_state');
+  assert.equal(field('checked').status,'review_required');
   assert.deepEqual(fields.filter(f => f.name === 'radio').map(f => [f.exportValue, f.checked]), [['A',false],['B',true]]);
   assert.equal(field('empty').value, '');
   assert.equal(field('secret').value, null);
@@ -48,6 +50,20 @@ test('real PDF parser extracts inherited values, choices, checkbox/radio selecti
   assert.ok(field('orphan').issues.includes('ORPHAN_WIDGET'));
   assert.ok(field('signature').issues.includes('UNSUPPORTED_FIELD_TYPE'));
   assert.equal(result.forms.appearanceVerified, false);
+});
+
+test('a checkbox whose raw value disagrees with its appearance state is never claimed as a verified stored value',async()=>{
+  const original=formPdf();
+  const stale=new Uint8Array(Buffer.from(Buffer.from(original).toString('latin1').replace('/V /Yes /AS /Yes','/V /Off /AS /Yes'),'latin1'));
+  assert.equal(stale.length,original.length); // Preserve synthetic xref offsets.
+  const result=await extractPdf(stale);
+  const field=result.pages[0].formFields.find(f=>f.name==='checked')!;
+  assert.equal(field.value,'Yes'); // PDF.js prefers /AS, even though raw /V is Off.
+  assert.equal(field.checked,true);
+  assert.equal(field.valueSource,'pdfjs_checkbox_state');
+  assert.equal(field.status,'review_required');
+  assert.ok(field.issues.includes('CHECKBOX_RAW_VALUE_UNVERIFIED'));
+  assert.match(result.warnings.join(' '),/rather than raw \/V/);
 });
 
 test('contradictory widgets, scripts, prototype-like names and unsupported values are marked for review', () => {

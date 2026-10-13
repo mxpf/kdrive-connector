@@ -1,11 +1,11 @@
 # Direct PDF extraction on Cloudflare Free
 
-Status (2026-10-13, capability revision `2026-10-13.6`): **source implemented;
+Status (2026-10-13, capability revision `2026-10-13.7`): **source implemented;
 not deployed**. `kdrive_read_pdf` returns text and stored AcroForm values directly
 to ChatGPT. Optional scanned-page OCR is implemented but **disabled by default**;
-the live model contract is verified. Explicit rotation correction and margin
-removal now pass the synthetic scan cases, but visual checkbox accuracy still
-fails acceptance. No Adobe file import, export URL, manual download or re-upload is needed by this
+OCR now uses a different Cloudflare vision model to address the prior checkbox
+failures. Explicit rotation correction, margin removal and region scope remain
+unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
 ## Architecture and Free-plan fit
@@ -30,9 +30,13 @@ include 128 MB memory, one-second startup and 64 MiB uncompressed bundle size,
 with no compressed bundle limit. Existing Free Durable Object quotas still apply.
 
 OCR sends one page image to Cloudflare Workers AI's
-[`@cf/moondream/moondream3.1-9B-A2B`](https://developers.cloudflare.com/workers-ai/models/moondream3.1-9B-A2B/)
-vision model with a transcription prompt, deterministic temperature and bounded
-output. This is generative visual transcription, not guaranteed document OCR.
+[`@cf/qwen/qwen3.8-27b`](https://developers.cloudflare.com/workers-ai/models/qwen3.8-27b/)
+vision model with an image-only user message, a fixed transcription prompt,
+temperature 0 and bounded output. Thinking is disabled, reasoning effort is low,
+and `store` is false. The model must distinguish a visible check/cross from an
+empty colored box. Only one assistant text choice with `finish_reason="stop"`
+is accepted; refusals, tool calls, missing completion markers and truncation
+fail closed. This is a fixed model replacement, not a fallback or second call. This is generative visual transcription, not guaranteed document OCR.
 Cloudflare's [Free allocation](https://developers.cloudflare.com/workers-ai/platform/pricing/)
 is 10,000 neurons per day, shared with other account usage. Free-plan requests
 fail when the allocation is exhausted. There is no plan upgrade, external model,
@@ -69,7 +73,11 @@ one model call per requested page/region, with no automatic orientation search,
 tilings or retries. A later region call re-downloads the source; carry
 `expectedSha256` to ensure it is the same version. OCR options require `ocr=true`.
 
-The full operation has a 20-second deadline. AI inference receives an abort
+Ordinary text/form reads have a 20-second deadline; OCR reads have a 45-second
+wall-clock deadline to accommodate observed inference latency. A live request
+exceeded the former 20-second limit, and another exceeded 45 seconds; both are
+retained as failures. The final suite passed without automatic retries. This
+changes the bounded asynchronous wait, not the Worker CPU quota. AI inference receives an abort
 signal and a bounded wait; cancellation cannot guarantee upstream computation
 has stopped. Synchronous parsing/rendering cannot be interrupted by a timer.
 One PDF read per isolate is admitted; other attempts receive `PDF_BUSY`.
@@ -77,8 +85,8 @@ One PDF read per isolate is admitted; other attempts receive `PDF_BUSY`.
 Results retain separate sources:
 
 - `pages[].text`: original text layer; `no_text` never implies a blank page.
-- `pages[].formFields`: stored AcroForm values, field names/types, button export
-  values and checked states, plus consistency issues.
+- `pages[].formFields`: parsed AcroForm values, field names/types, button export
+  values and checked states, plus provenance and consistency issues.
 - `ocr`: optional page-numbered visual transcription, model, image dimensions
   and `review_required`/`no_text_detected` status. `preparation` records full-page
   versus region scope, requested region, source dimensions, pixel crop and
@@ -100,7 +108,17 @@ checkbox/radio selection values. Orphan widgets, conflicting values, mismatched
 tree entries, unsupported field types and scripted fields are flagged for review.
 Password field values are redacted. Scripts are never evaluated by the reader.
 
-`stored_value` means a consistent stored value, **not visual verification**.
+Checkboxes need a specific caveat: PDF.js 6.1.200 normalizes checkbox
+`fieldValue` from `/AS` when present, and its tree view uses that same normalized
+value. Comparing the two cannot independently verify raw `/V`. Checkbox fields
+therefore include `valueSource="pdfjs_checkbox_state"`,
+`status="review_required"` and `CHECKBOX_RAW_VALUE_UNVERIFIED`.
+Their `checked` state remains available, but is not described as verified raw
+storage. `forms.source` is `acroform_parsed_values`; OCR continues to come only
+from rendered pixels and never overwrites parser output.
+
+For other supported fields, `stored_value` means a consistent parsed stored
+value, **not visual verification**.
 Stale appearance streams can disagree with `/V`; OCR may itself be mistaken.
 Resolve discrepancies before relying on amounts, dates or selected marks. Fields
 without widgets, widgets outside the selected pages, annotations, digital
@@ -150,8 +168,8 @@ truncated/unknown and oversized responses, provider failures, timeout and no ret
 These establish plumbing and error behavior, **not live recognition accuracy**.
 No private tax files were accessed or used as fixtures.
 
-Validation passed: 195 root tests, 25 Worker tests, three local workerd HTTP
-tests and two independent-client/Python integration tests (225 total), both
+Validation passed: 197 root tests, 25 Worker tests, three local workerd HTTP
+tests and two independent-client/Python integration tests (227 total), both
 TypeScript checks and the Node build. The earlier local dry build produced
 11,261.08 KiB uncompressed (3,652.14 KiB gzip), below the documented Free bundle
 limit. Local tests are not production CPU, startup or memory measurements.
@@ -171,9 +189,9 @@ response-contract diagnostics. No private tax documents were used.
 
 The first request exposed an adapter bug: the model returns a nested
 `{result: {answer, finish_reason, ...}, usage: ...}` object inside the REST API's
-outer result. The adapter previously expected `answer` directly. It now supports
-both shapes, with regression coverage using the actual captured responses and
-a local workerd test using the nested shape. All seven subsequent cases returned
+outer result. The original adapter expected `answer` directly; that revision
+added support for both shapes. These historical response records are retained
+for regression comparison; the current Qwen adapter uses chat-completion choices. All seven subsequent cases returned
 HTTP 200 and `finish_reason: "stop"`.
 
 **Recognition acceptance failed.** Ordinary scans, mixed text/images,
@@ -210,7 +228,7 @@ amount, date, negative sign and bracketed mark matched in these cases.
 The filled form's text and all five stored field values still match, but its
 visual checkbox states are omitted. Separate prompt and focused-region trials
 either omitted or misclassified the empty checkbox; these were not promoted as
-fixes. The original transcription prompt is retained. Structured AcroForm values
+fixes. That revision retained the original transcription prompt. Structured AcroForm values
 continue to carry the correct selected states and never become OCR guesses.
 
 The final run used 286.82 neurons; the entire follow-up, including unsuccessful
@@ -220,10 +238,28 @@ responses and a replay regression. Normal generation termination is not an
 accuracy guarantee. The live runner correctly exits nonzero for the remaining
 form failure, while the local regression suite passes by detecting that failure.
 
+### Checkbox follow-up: 2026-10-13
+
+Moondream's repeated checkbox omissions/misclassifications were a model accuracy
+problem, not missing file bytes or missing appearances. Qwen 3.8 27B correctly
+read the original checked/empty pair in the initial probe on Workers Free. The
+expanded suite adds reversed, both-empty, both-checked, independently rasterized
+and stale-state forms to the existing scan tests. **All 15 cases passed in the
+final live run**, including each checked and empty state. Earlier timeout failures
+are retained rather than discarded. See the
+[checkbox evidence](evidence/ocr-checkbox-2026-10-13.md) for complete results,
+usage, timings and retained failures.
+
+The stale fixture independently proves that raw `/V` can disagree with both
+PDF.js views. The runner now requires the explicit source/review marker for
+checkbox fields instead of falsely accepting them as independent stored values.
+Visual recognition is still assessed against actual rendered marks, including
+on a flattened PDF that has no stored fields.
+
 ### Remaining release gates
 
-OCR stays disabled. General visual checkbox recognition is still unreliable,
-and the ten simple synthetic cases do not establish dense-page or arbitrary-scan
+OCR stays disabled pending separately authorized deployment and production
+validation. Passing synthetic cases does not establish dense-page or arbitrary-scan
 accuracy. Explicit region selection needs known layout; orientation correction
 needs known orientation. Automatic orientation/region detection is not implemented.
 

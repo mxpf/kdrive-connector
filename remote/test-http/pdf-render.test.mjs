@@ -25,8 +25,8 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
           const result = await readKDrivePdf(client, 42, { path: '/fixture.pdf', ocr: true, ocrRotation: 270, ocrRegion: {x:0,y:0,width:1,height:.5}, password: input.encrypted ? 'synthetic-open-password' : undefined }, {
             render: (bytes, page, password, options) => renderPdfOcrPage(bytes, page, password, options, wasm),
             provider: cloudflareOcrProvider({ run: async (model, payload) => {
-              if (!payload.image.startsWith('data:image/png;base64,iVBOR')) throw new Error('Invalid PNG input');
-              return { result: { answer: 'MOCK OCR RESPONSE', finish_reason: 'stop' }, usage: { neurons: 30 } };
+              if (!payload.messages[1].content[0].image_url.url.startsWith('data:image/png;base64,iVBOR')) throw new Error('Invalid PNG input');
+              return { choices: [{ message: {role: 'assistant', content: 'MOCK OCR RESPONSE'}, finish_reason: 'stop' }], usage: { neurons: 30 } };
             } }),
           });
           return Response.json(result);
