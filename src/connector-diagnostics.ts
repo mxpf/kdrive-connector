@@ -2,7 +2,7 @@ import { BINARY_MAX_BYTES, BINARY_TIMEOUT_MS, EXPORT_TTL_MS } from "./binary-tra
 import { DIGEST_CACHE_MAX_ENTRIES, DIGEST_CACHE_TTL_MS } from "./binary-digest-cache.js";
 
 export const CONNECTOR_VERSION = "0.3.1";
-export const CAPABILITY_REVISION = "2026-10-13.1";
+export const CAPABILITY_REVISION = "2026-10-13.2";
 
 // A deployment ID identifies the actual running Worker, not the client's catalog.
 // Local builds deliberately report unknown rather than inventing a Git revision.

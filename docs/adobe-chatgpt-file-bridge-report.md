@@ -40,3 +40,62 @@ Please verify agreement between model-visible file inputs, host file-reference t
 OpenAI's [file-input contract](https://developers.openai.com/plugins/reference#define-file-inputs) describes structured objects with required `file_id` and `download_url`. This does not itself establish that ChatGPT can mint native file IDs for arbitrary MCP exports. Adobe's [external-storage documentation](https://developer.adobe.com/document-services/docs/overview/pdf-services-api/howtos/pdf-external-storage-sol) describes provider-specific storage support; it is not proof of this connector's internal implementation.
 
 No kDrive changes were made in the export/Acrobat tests. Please request sanitized traces if needed; do not include bearer download URLs, OAuth tokens, cookies, or private PDF contents in support tickets.
+
+## 2026-10-13 contract investigation
+
+**Outcome: the automatic ChatGPT-to-Adobe import is still unresolved.** This
+follow-up inspected current public contracts and available tool declarations;
+it did not reproduce the historical upload-validator failure in classic
+ChatGPT. No new support message was sent. The earlier submission status above
+is historical, not a fresh support-status check.
+
+The [0.3.1 investigation](binary-interop-0.3.1.md) independently verified raw
+delivery and extraction through Codex's local-file adapter. That proves the
+transport and that specific adapter, not native attachment creation in every
+ChatGPT host. The currently exposed Acrobat tools in this Codex session accept
+host-adapted local paths; the historical `asset_openai_file_upload` tool is not
+exposed here. `document_upload` is an interactive local-file picker, not a
+remote URL import endpoint.
+
+### Candidate routes and their limits
+
+| Route | Finding |
+| --- | --- |
+| MCP export → native attachment | The [OpenAI reference](https://developers.openai.com/plugins/reference#define-file-inputs) documents native file **inputs**, but supplies no verified arbitrary-URL-to-conversation-file output contract. The connector cannot mint a native file ID. |
+| Widget `uploadFile` | The same reference describes uploading a user-selected file and returning a file ID. It does not establish automatic remote PDF import and authorization for a different plugin. A widget prototype would still need real cross-plugin acceptance evidence. |
+| File extensions | The [OpenAI MCP extensions specification](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md) scopes file entrypoints to desktop and excludes classic ChatGPT from its platform matrix. `openai/resources/write` can modify only the resource supplied to the file entrypoint; it is not a general attachment-creation API. |
+| GPT Action `openaiFileResponse` | [Action file responses](https://developers.openai.com/api/docs/actions/sending-files) can create conversation files, but this is a different integration contract. [GPT configuration](https://help.openai.com/en/articles/9442513-configuring-actions-in-gpts) permits apps or actions, not both, so switching to an Action does not establish a bridge to the Adobe app. |
+| Worker URL → Adobe external storage | Adobe's [PDF Services external-storage contract](https://developer.adobe.com/document-services/docs/overview/pdf-services-api/howtos/pdf-external-storage-sol) lists SharePoint, S3, Dropbox and Azure Blob URL formats. Our Worker URL is outside those formats. This is consistent with `MISMATCHED_INPUT_STORAGE_TYPE`, but does not prove Acrobat's internal implementation. |
+
+A separate Adobe PDF Services integration would be a different architecture
+with its own credentials, service terms and processing path. It would not repair
+the connected Adobe app's native-file adapter. No such integration, new storage
+service, public rehosting, or speculative output metadata was added.
+
+### Changes and completion requirements
+
+The shared server instructions and export-tool description now require checking
+the receiving host's import capability for Adobe. They discourage repeated
+exports, incompatible storage-type retries and invented file or asset IDs.
+Capability revision `2026-10-13.2` identifies this guidance change; it does not
+advertise a new binary-import capability.
+
+To finish the requested workflow, obtain a supported host import operation that
+turns verified export bytes into a genuine native file accepted by the connected
+Adobe app, or a supported Adobe ingestion operation for this export format.
+Reconcile the host's exposed schema with its native-file transformation. Then
+verify in the target ChatGPT host, using synthetic fixtures:
+
+1. Locate and export an ordinary PDF; independently check complete bytes and
+   SHA-256.
+2. Import it without user download/re-upload; obtain a real native file or Adobe
+   asset through the supported operation.
+3. Extract `ORCHID-7319` from the ordinary fixture through Adobe.
+4. Test an encrypted fixture through supported password handling, including
+   missing and incorrect passwords, without logging passwords or contents.
+5. Verify expired references fail and refreshed references retain the expected
+   version and digest.
+
+Local mocks cannot certify steps 2–4 in ChatGPT. The full acceptance criterion
+remains open. Cloudflare Free configuration is unchanged. This follow-up made
+no deployment, live upload, or private-document transfer.

@@ -294,6 +294,13 @@ Export returns `file_name`, `mime_type`, `size_bytes`, `sha256`, `resolved_versi
 
 Native inputs use OpenAI's documented `_meta["openai/fileParams"]` contract. A bare `file_id`, `/mnt/data/...`, or `sandbox:/...` string is **not** a remote file reference. The host must supply its temporary `download_url`. Reference upload never looks up another file by name. Existing destinations fail safely; these tools do not overwrite or automatically rename.
 
+**ChatGPT → Adobe remains blocked in hosts without a file-import adapter.** The
+current public contracts do not establish automatic conversion of our export
+into a native conversation attachment. The connector now instructs the model to
+check for an adapter and stop incompatible retries. This guidance does not add
+the missing import capability. See the [October 13 contract investigation and
+completion requirements](docs/adobe-chatgpt-file-bridge-report.md#2026-10-13-contract-investigation).
+
 Follow the host's file-selection instructions: Codex may accept a local path as its adapter input, while the raw MCP server requires the resolved object. Do not manually convert between those representations. The deployed upload correction supplies `binary_error_code` and `trace_id`; the client may normalize its generic `error_code`. Unknown source hosts remain blocked and require exact-host review, not alternate URL spellings or public rehosting. See [current limitations](#advantages-and-current-limitations).
 
 Uploads use an Infomaniak upload session, bounded 4 MiB buffers, incremental SHA-256, and per-chunk provider checksums. Size and optional expected SHA-256 are checked **before finalization**. No full-file buffering, base64 transport, new storage service, or source-URL persistence is involved. Supply `expected_size` if the source lacks Content-Length. Empty files can still use the inline action.
