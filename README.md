@@ -27,6 +27,7 @@ These are recorded observations, not guarantees for every host or account.
 | Presentation | Rich cards and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
 | Binary uploads | Native host file adapter, bounded streaming, checksums, no base64 in model context | Host must resolve the file; exact source-host allowlist can reject newly selected regions |
 | Binary exports | Short-lived raw-byte references, pinned version, size and SHA-256 | Downstream tools must support that reference or an explicit import bridge |
+| Direct PDF reading (source; undeployed) | Page-numbered PDF text returned to ChatGPT without Adobe or re-upload | Text layer only; 5 MiB, 200 document pages, 5 pages per call; no OCR |
 | Local large-file transfers | Direct kDrive upload/download with independent SHA-256 verification, bypassing the Worker | Local credentials and files required; 1 GiB ceiling, with one live 269 MB round trip verified |
 
 Live checks passed for synthetic PNG, SVG, PDF, ZIP-format, and Markdown files,
@@ -36,13 +37,18 @@ repeated 99 MiB download-backs through the Worker were truncated; a correlated
 Cloudflare trace reported `exceededCpu`. A retry of an existing upload destination
 failed safely without overwriting or creating a renamed duplicate.
 
-The current deployment uses **Cloudflare Workers Free**. Its 10 ms CPU allowance
+The current deployment uses **Cloudflare Workers Free**. The ordinary HTTP Worker's 10 ms CPU allowance
 is distinct from the connector's 120-second wall-clock transfer timeout. The
 configured 100 MiB binary ceiling is a safety limit, **not a promise of reliable
 100 MiB transfers**. There is no measured universal safe file-size cutoff.
 Cloudflare rejected an attempted configurable CPU budget because it requires
 Workers Paid; no account upgrade was performed. See the official
 [CPU limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
+
+The new direct PDF reader runs inside the existing SQLite MCP Durable Object,
+which has a separate documented default CPU allowance. It does not run on the
+public binary-download route. See [direct PDF extraction](docs/pdf-extraction.md)
+for Free-plan limits, local evidence and the remaining deployment checks.
 
 For large files available to local Codex, use the
 [direct-transfer CLI](#local-codex-transfer-direct-large-file-path). It keeps
@@ -281,6 +287,14 @@ available independently of this package.
 The included `manage-kdrive-files` skill teaches compatible hosts when to select kDrive, how to run the internal prepare/write protocol, how to present previews and readable links, and how to keep connector internals out of normal conversation. The legacy package needs an active app mapping before use, as described above. If a user asks only to preview a change, the skill prevents both prepare and write tools from running. These core workflow safeguards are also supplied by the server, so the current remote app does not depend on the separate skill package.
 
 ## Binary interoperability
+
+For reading or summarizing a PDF, the new **`kdrive_read_pdf`** action returns
+page-numbered text directly. It bypasses the Adobe attachment handoff. Start with
+`path`, follow `nextPage`, and carry the first result's `sha256` as
+`expectedSha256` on later calls. Password-protected PDFs accept an optional
+user-authorized password. Scans require OCR, and form values or visual table
+structure may be missing. This implementation is **not deployed yet**; see
+[limits and verification](docs/pdf-extraction.md).
 
 For binary files, use **native file reference first, signed HTTPS fallback, inline base64 only for small files**. The model exchanges references and metadata, not file bytes.
 

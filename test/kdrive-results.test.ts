@@ -21,6 +21,12 @@ test("missing PDF previews provide a structured export recovery action", async (
   assert.equal(result.structuredContent?.next_tool, "kdrive_export_file");
   assert.deepEqual(JSON.parse(result.content[0].text!), result.structuredContent);
 });
+test("missing PDF previews prefer direct connector extraction when identified as PDF", async () => {
+  const h = fixture();
+  h.client.downloadText = async () => { throw new TextPreviewUnavailableError("kdrive_read_pdf"); };
+  const result = await h.run("read_file", { path: h.file.path, mode: "text" });
+  assert.equal(result.structuredContent?.next_tool, "kdrive_read_pdf");
+});
 function fixture(bytes = Buffer.from("hello"), server?: McpServer) {
   const file = { id: 2, path: "/Private/test.md", name: "test.md", type: "file", size: bytes.length, etag: "private-version" };
   const folder = { id: 1, path: "/Private", name: "Private", type: "dir" };

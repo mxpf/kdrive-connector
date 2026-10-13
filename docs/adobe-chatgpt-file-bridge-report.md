@@ -1,5 +1,9 @@
 # Report: ChatGPT Adobe upload bridge input-schema mismatch
 
+Update (2026-10-13): [direct connector PDF extraction](pdf-extraction.md) now
+bypasses this handoff for supported text-reading tasks. It is locally tested and
+undeployed; the Adobe attachment-import issue described below remains open.
+
 Status: **submitted to OpenAI Help Center and escalated to a support specialist** on 2026-09-29. Support confirmed replies will also arrive by email; no case number was displayed. Not submitted separately to Adobe.
 
 The submission included the sanitized reproduction, request IDs, conversation ID and runtime details below. A follow-up clarified that the estimated incident time was not a verified trace timestamp and that this is an MCP/app integration, not a legacy GPT Action. The automated support suggestion involving `openaiFileResponse` was not treated as a verified MCP fix or implemented. No signed download URLs, credentials or PDF contents were sent.

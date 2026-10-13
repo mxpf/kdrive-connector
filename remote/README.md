@@ -20,9 +20,12 @@ other remote MCP clients.
 
 ## Deploy
 
-Use Node.js 24 or newer. Install dependencies and create the OAuth state namespace:
+Use Node.js 24 or newer. Install dependencies in both the repository root and
+`remote` (shared source resolves the PDF parser from the root). From `remote`,
+install and create the OAuth state namespace:
 
 ```bash
+(cd .. && npm ci)
 npm ci
 npx wrangler kv namespace create OAUTH_KV
 ```
@@ -90,6 +93,12 @@ Never put `.dev.vars`, API tokens, OAuth client secrets, or cookie encryption
 keys in Git. The included `.gitignore` excludes local secret files.
 
 ## Binary handoff
+
+Source revision `2026-10-13.3` also adds `kdrive_read_pdf` for direct text reading
+inside the existing SQLite MCP Durable Object, bypassing Adobe and native file
+import. It supports 5 MiB PDFs, up to 200 pages, in batches of five pages. It does
+not perform OCR or guarantee extraction of form values. It adds no paid binding
+or plan change and is **not deployed yet**. See [design and local test evidence](../docs/pdf-extraction.md).
 
 The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and
 `kdrive_upload_from_url`. The `/binary/:token` endpoint serves raw, version-pinned

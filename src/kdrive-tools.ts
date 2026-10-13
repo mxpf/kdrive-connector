@@ -28,6 +28,7 @@ import {
 } from "./operational-logging.js";
 import { validateName } from "./safety.js";
 import { registerBinaryTools, type BinaryToolConfig } from "./binary-tools.js";
+import { registerPdfTools } from "./pdf-tools.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -279,7 +280,7 @@ function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {
 
 function errorContent(error: unknown) {
   if (error instanceof TextPreviewUnavailableError) {
-    const result = { error_code: error.code, message: error.message, next_tool: "kdrive_export_file" };
+    const result = { error_code: error.code, message: error.message, next_tool: error.nextTool };
     return { isError: true, structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
   }
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -512,6 +513,7 @@ export function registerKDriveTools(
   config: KDriveToolConfig,
 ): void {
   registerBinaryTools(server, client, config);
+  registerPdfTools(server, client, config.driveId);
   const resourceServer = server as unknown as {
     registerResource: (
       name: string,
@@ -703,7 +705,7 @@ export function registerKDriveTools(
     "kdrive_read_file",
     {
       title: "Read a kDrive file",
-      description: "Use to read or summarize one known kDrive file by path. Use kdrive_get_file metadata for identification, and reuse connector-side previews when sufficient. Prefer text reads. For binary handoff to another tool, prefer kdrive_export_file. Base64 is only for small inline files, never large binary transport; it may require native download approval. Reuse an already materialized file within the task when available instead of requesting it again.",
+      description: "Use to read or summarize one known kDrive file by path. Use kdrive_get_file metadata for identification, and reuse connector-side previews when sufficient. Prefer text reads; for PDFs use kdrive_read_pdf for direct page-numbered extraction. For binary handoff to another tool, prefer kdrive_export_file. Base64 is only for small inline files, never large binary transport; it may require native download approval. Reuse an already materialized file within the task when available instead of requesting it again.",
       inputSchema: { path: kdrivePath, mode: z.enum(["text", "base64"]).default("text") },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },

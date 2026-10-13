@@ -34,12 +34,14 @@ for (const mode of modes) {
       }
       const value = result.value;
       const items = value.tools ?? value.resources ?? value.resourceTemplates;
-      const valid = index === 0 ? value.tools?.length === 17 &&
+      // Accept the deployed catalog and the undeployed direct-PDF extension.
+      const valid = index === 0 ? [17, 18].includes(value.tools?.length) &&
         ["kdrive_export_file", "kdrive_upload_file_ref", "kdrive_upload_from_url"].every(name => value.tools.some(tool => tool.name === name))
-        : index === 1 ? value.resources?.length === 2 : value.resourceTemplates?.length === 0;
+        && (value.tools.length !== 18 || value.tools.some(tool => tool.name === "kdrive_read_pdf"))
+        : index === 1 ? [2, 3].includes(value.resources?.length) : value.resourceTemplates?.length === 0;
       if (!valid) failed = true;
       return { method: methods[index], ok: !!valid, count: items.length,
-        ...(value.tools ? { names: value.tools.map(tool => tool.name) } : {}) };
+        ...(value.tools ? { names: value.tools.map(tool => tool.name), pdfTextExtraction: value.tools.some(tool => tool.name === "kdrive_read_pdf") } : {}) };
     });
     console.log(JSON.stringify({ mode, durationMs: Date.now() - started, results: summary }));
   } catch (error) {

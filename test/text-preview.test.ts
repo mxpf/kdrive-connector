@@ -20,6 +20,7 @@ for (const type of ["application/pdf", "text/html"]) test(`unavailable previews 
   await assert.rejects(client.downloadText(42, 7, { file, maxBytes: 1024 }), (e: unknown) => {
     assert.ok(e instanceof TextPreviewUnavailableError);
     assert.equal(e.code, "TEXT_PREVIEW_UNAVAILABLE");
+    assert.equal(e.nextTool, "kdrive_read_pdf");
     assert.match(e.message, /kdrive_export_file/);
     assert.doesNotMatch(e.message, /PRIVATE|search content not found|read limit/);
     return true;

@@ -28,9 +28,9 @@ it.each([false, true])("discovers all tools and resources with notification miti
       client.listResourceTemplates(undefined, { timeout: 3000 }),
     ]);
     expect(getRequests).toBeGreaterThan(0);
-    expect(tools.tools).toHaveLength(17);
+    expect(tools.tools).toHaveLength(18);
     expect(tools.tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
-      "kdrive_export_file", "kdrive_upload_file_ref", "kdrive_upload_from_url",
+      "kdrive_export_file", "kdrive_upload_file_ref", "kdrive_upload_from_url", "kdrive_read_pdf",
     ]));
     const upload = tools.tools.find(tool => tool.name === "kdrive_upload_file_ref")!;
     expect(upload._meta?.["openai/fileParams"]).toEqual(["file_ref"]);

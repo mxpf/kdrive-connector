@@ -557,6 +557,7 @@ export class KDriveClient {
     options: { file?: KDriveFile; maxBytes?: number } = {},
   ): Promise<TextDownloadResult> {
     const file = options.file ?? await this.getFile(driveId, fileId);
+    const unavailable = () => new TextPreviewUnavailableError(file.mime_type === "application/pdf" || /\.pdf$/i.test(file.name) ? "kdrive_read_pdf" : "kdrive_export_file");
     if (isTextContentType(file.mime_type)) {
       return { ...await this.download(driveId, fileId, { maxBytes: options.maxBytes }), textSource: "raw" };
     }
@@ -572,7 +573,7 @@ export class KDriveClient {
       const contentType = response.headers.get("content-type") ?? "text/plain";
       if (!isTextContentType(contentType) || contentType.split(";", 1)[0].trim().toLowerCase() === "text/html") {
         await response.body?.cancel();
-        throw new TextPreviewUnavailableError();
+        throw unavailable();
       }
       return {
         bytes: await readResponseBytes(response, options.maxBytes),
@@ -589,7 +590,7 @@ export class KDriveClient {
         const contentType = response.headers.get("content-type") ?? "application/octet-stream";
         if (!isTextContentType(contentType) || contentType.split(";", 1)[0].trim().toLowerCase() === "text/html") {
           await response.body?.cancel();
-          throw new TextPreviewUnavailableError();
+          throw unavailable();
         }
         return { bytes: await readResponseBytes(response, options.maxBytes), contentType, textSource: "converted" };
       } catch (conversionError) {
@@ -597,9 +598,9 @@ export class KDriveClient {
         if (conversionError instanceof KDriveApiError && [401, 403, 429].includes(conversionError.status)) throw conversionError;
         // Do not fetch a known binary a third time and mask a missing preview
         // with the inline byte limit. Unknown MIME types retain the text fallback.
-        if (file.mime_type && file.mime_type !== "application/octet-stream") throw new TextPreviewUnavailableError();
+        if (file.mime_type && file.mime_type !== "application/octet-stream") throw unavailable();
         const raw = await this.download(driveId, fileId, { maxBytes: options.maxBytes });
-        if (!isTextContentType(raw.contentType)) throw new TextPreviewUnavailableError();
+        if (!isTextContentType(raw.contentType)) throw unavailable();
         return { ...raw, textSource: "raw" };
       }
     }
