@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { extractPdf } from '../src/pdf-extract.js';
 import { extractFormFields } from '../src/pdf-forms.js';
 
-function formPdf(extra = '', fieldValue = 'SYNTHETIC VALUE', checked = true) {
+function formPdf(extra = '', fieldValue = 'SYNTHETIC VALUE', checked = true, singleChoice = false) {
   // Hierarchical text field, checkbox, multiselect, radio group, empty/default,
   // redacted password, orphan widget and an unsupported signature. All synthetic.
   const objects = [
@@ -14,7 +14,7 @@ function formPdf(extra = '', fieldValue = 'SYNTHETIC VALUE', checked = true) {
     '<< /Type /Annot /Subtype /Widget /Parent 4 0 R /Rect [10 10 200 30] /P 3 0 R >>',
     `<< /Type /Annot /Subtype /Widget /FT /Btn /T (checked) /V /${checked ? 'Yes' : 'Off'} /AS /${checked ? 'Yes' : 'Off'} /Rect [10 40 30 60] /P 3 0 R >>`,
     '<< /Type /Annot /Subtype /Widget /FT /Tx /T (orphan) /V (UNTRUSTED) /Rect [10 70 200 90] /P 3 0 R >>',
-    '<< /Type /Annot /Subtype /Widget /FT /Ch /T (choices) /Ff 2097152 /Opt [(A) (B) (C)] /V [(A) (C)] /Rect [10 100 200 120] /P 3 0 R >>',
+    `<< /Type /Annot /Subtype /Widget /FT /Ch /T (choices) /Ff ${singleChoice ? 131072 : 2097152} /Opt [(A) (B) (C)] /V ${singleChoice ? '(B)' : '[(A) (C)]'} /Rect [10 100 200 120] /P 3 0 R >>`,
     '<< /FT /Btn /T (radio) /Ff 32768 /V /B /Kids [10 0 R 11 0 R] >>',
     '<< /Type /Annot /Subtype /Widget /Parent 9 0 R /AS /Off /AP << /N << /Off 15 0 R /A 15 0 R >> >> /Rect [10 130 30 150] /P 3 0 R >>',
     '<< /Type /Annot /Subtype /Widget /Parent 9 0 R /AS /B /AP << /N << /Off 15 0 R /B 15 0 R >> >> /Rect [50 130 70 150] /P 3 0 R >>',
@@ -74,4 +74,15 @@ test('unchecked fields stay false, Unicode values survive, and XFA is explicitly
   assert.equal(result.pages[0].formFields.find(f => f.name === 'checked')?.checked, false);
   assert.equal(result.forms.xfaPresent, true);
   assert.match(result.warnings.join(' '), /XFA forms are unsupported/);
+});
+
+test('single-select choices compare scalar tree values to widget arrays without false conflicts', async () => {
+  const result = await extractPdf(formPdf('', 'SYNTHETIC', true, true));
+  const field = result.pages[0].formFields.find(f => f.name === 'choices')!;
+  assert.deepEqual(field.value, ['B']);
+  assert.equal(field.status, 'stored_value');
+  assert.deepEqual(field.issues, []);
+  const widget = {subtype:'Widget', id:'1',fieldName:'choice',fieldType:'Ch',fieldValue:['B']};
+  assert.equal(extractFormFields([widget], {choice:[{id:'1',value:'C'}]})[0].status,'review_required');
+  assert.equal(extractFormFields([{...widget,fieldType:'Tx'}], {choice:[{id:'1',value:'B'}]})[0].status,'review_required');
 });

@@ -7,7 +7,13 @@ export interface PdfFormField {
 }
 const scalar = (v: unknown): FormValue => v == null ? null : typeof v === "string" || typeof v === "boolean" || typeof v === "number" ? v
   : Array.isArray(v) && v.every(x => typeof x === "string") ? v : null;
-const same = (a: unknown, b: unknown) => JSON.stringify(scalar(a)) === JSON.stringify(scalar(b));
+// PDF.js exposes a single choice as a scalar in the field tree and as a
+// one-element array on its widget. Normalize only choice fields for comparison;
+// preserve the widget's selected-values array in the public result.
+const same = (a: unknown, b: unknown, choice: boolean) => {
+  const normalize = (v: unknown) => choice && typeof v === "string" ? [v] : scalar(v);
+  return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
+};
 export function extractFormFields(annotations: any[], tree: Record<string, any[]> | null) {
   const fields: PdfFormField[] = [];
   for (const widget of annotations) {
@@ -18,9 +24,10 @@ export function extractFormFields(annotations: any[], tree: Record<string, any[]
     const issues: string[] = [];
     if (!name) issues.push("UNNAMED_FIELD");
     if (!canonical) issues.push("ORPHAN_WIDGET");
-    if (canonical && !same(canonical.value, widget.fieldValue)) issues.push("TREE_WIDGET_VALUE_MISMATCH");
+    const choice = widget.fieldType === "Ch";
+    if (canonical && !same(canonical.value, widget.fieldValue, choice)) issues.push("TREE_WIDGET_VALUE_MISMATCH");
     const values = entries.filter(entry => "value" in entry);
-    if (!widget.radioButton && values.some(entry => !same(entry.value, widget.fieldValue))) issues.push("CONFLICTING_FIELD_VALUES");
+    if (!widget.radioButton && values.some(entry => !same(entry.value, widget.fieldValue, choice))) issues.push("CONFLICTING_FIELD_VALUES");
     const supported = ["Tx", "Ch", "Btn"].includes(widget.fieldType) && !widget.pushButton;
     if (!supported) issues.push("UNSUPPORTED_FIELD_TYPE");
     if (widget.actions || canonical?.actions) issues.push("SCRIPTED_FIELD_NOT_EVALUATED");
