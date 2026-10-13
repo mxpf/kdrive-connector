@@ -1,4 +1,5 @@
 interface Env {
+	AI?: import("../../src/pdf-ocr.js").OcrAiBinding;
 	OAUTH_PROVIDER: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
 	GITHUB_CLIENT_ID: string;
 	GITHUB_CLIENT_SECRET: string;
@@ -6,4 +7,8 @@ interface Env {
 	KDRIVE_ACCESS_TOKEN: string;
 	KDRIVE_DRIVE_ID: string;
 	KDRIVE_OPERATION_SECRET: string;
+}
+declare module "*.wasm" {
+	const module: WebAssembly.Module;
+	export default module;
 }

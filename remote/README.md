@@ -94,11 +94,12 @@ keys in Git. The included `.gitignore` excludes local secret files.
 
 ## Binary handoff
 
-Source revision `2026-10-13.3` also adds `kdrive_read_pdf` for direct text reading
+Source revision `2026-10-13.4` also adds `kdrive_read_pdf` for direct text reading
 inside the existing SQLite MCP Durable Object, bypassing Adobe and native file
-import. It supports 5 MiB PDFs, up to 200 pages, in batches of five pages. It does
-not perform OCR or guarantee extraction of form values. It adds no paid binding
-or plan change and is **not deployed yet**. See [design and local test evidence](../docs/pdf-extraction.md).
+import. It supports 5 MiB PDFs, up to 200 pages, in batches of five pages. It also
+extracts stored AcroForm values with consistency warnings. Optional one-page
+Workers AI OCR is implemented but disabled pending live validation. The default
+configuration adds no AI binding or plan change and is **not deployed yet**. See [design and local test evidence](../docs/pdf-extraction.md).
 
 The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and
 `kdrive_upload_from_url`. The `/binary/:token` endpoint serves raw, version-pinned

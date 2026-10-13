@@ -51,7 +51,7 @@ test("direct PDF reads return verified bytes, bounded page text and clear limita
   assert.match(result.pages[0].text, /ORCHID-7319/);
   assert.equal(result.hasMore, false);
   assert.equal(result.nextPage, null);
-  assert.match(result.warnings.join(" "), /form values may be missing/);
+  assert.match(result.warnings.join(" "), /not visually verified/);
 });
 
 test("encrypted PDFs distinguish missing and wrong passwords, and extract with authorized password", async () => {

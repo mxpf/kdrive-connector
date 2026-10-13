@@ -24,7 +24,9 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@hyzyla/pdfium": "3.0.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "fast-png": "8.0.0",
     "unpdf": "1.8.1",
     "zod": "^4.4.3"
   },

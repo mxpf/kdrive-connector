@@ -1,123 +1,157 @@
 # Direct PDF extraction on Cloudflare Free
 
-Status (2026-10-13): implemented and locally tested; **not deployed**. The new
-`kdrive_read_pdf` action returns PDF text to ChatGPT without an Adobe call, native
-attachment import, signed export URL, or manual download/re-upload. This solves
-the text-reading path for supported PDFs; it does not repair Adobe ingestion.
+Status (2026-10-13, capability revision `2026-10-13.4`): **source implemented;
+not deployed**. `kdrive_read_pdf` returns text and stored AcroForm values directly
+to ChatGPT. Optional scanned-page OCR is implemented but **disabled by default**;
+its live model contract and recognition accuracy remain acceptance gates. No
+Adobe file import, export URL, manual download or re-upload is needed by this
+reader. This does not repair the separate Adobe attachment bridge.
 
 ## Architecture and Free-plan fit
 
-The shared MCP tool uses pinned-version kDrive retrieval, checks the complete
-byte length, computes SHA-256, then parses the bytes in memory. Remote tools run
-inside the existing SQLite `KDriveMCP` Durable Object; the Node stdio server can
-use the same reader. No new binding, migration, storage service, AI service,
-credential, paid feature or plan change is required.
+The reader downloads a pinned kDrive version, checks the complete byte length
+and SHA-256, and only then processes the bytes. Text and forms use `unpdf` 1.8.1
+(PDF.js 6.1.200). OCR uses `@hyzyla/pdfium` 3.0.0 to render a complete page,
+including form appearances, and `fast-png` to encode it. The render includes
+page rotation, crop, image transforms and overlaid content; it does not merely
+send embedded image objects. Dependencies and WASM are bundled, with no CDN fetch.
+The browser export of PDFium is required in Workers; Node uses its Node export.
 
-Cloudflare documents a default 30-second CPU budget for [Durable Object
-invocations](https://developers.cloudflare.com/durable-objects/platform/limits/).
-That is distinct from the ordinary Free HTTP Worker's 10 ms CPU allowance.
-[Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
-also specify 128 MB memory, a one-second startup budget and a 64 MiB uncompressed
-bundle ceiling. The current docs explicitly say compressed bundle size is not a
-limit. Do not move parsing to the public `/binary` HTTP handler.
+Parsing and rendering run inside the existing SQLite `KDriveMCP` Durable Object,
+whose documented default [CPU allowance](https://developers.cloudflare.com/durable-objects/platform/limits/)
+is 30 seconds. The public HTTP Worker's Free allowance is only 10 ms; do not move
+this work to the `/binary` route. [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+include 128 MB memory, one-second startup and 64 MiB uncompressed bundle size,
+with no compressed bundle limit. Existing Free Durable Object quotas still apply.
 
-The existing Free [Durable Object allocation](https://developers.cloudflare.com/durable-objects/platform/pricing/)
-includes 100,000 requests and 13,000 GB-s per day, shared with other usage. This
-design stays within the Free product tier; those quotas still apply.
+OCR sends one page image to Cloudflare Workers AI's
+[`@cf/moondream/moondream3.1-9B-A2B`](https://developers.cloudflare.com/workers-ai/models/moondream3.1-9B-A2B/)
+vision model with a transcription prompt, deterministic temperature and bounded
+output. This is generative visual transcription, not guaranteed document OCR.
+Cloudflare's [Free allocation](https://developers.cloudflare.com/workers-ai/platform/pricing/)
+is 10,000 neurons per day, shared with other account usage. Free-plan requests
+fail when the allocation is exhausted. There is no plan upgrade, external model,
+AI Gateway billing, automatic retry or paid fallback in this implementation.
+A later account upgrade could change billing; keep the account on Workers Free.
 
-We pinned `unpdf` 1.8.1, whose installed serverless build reports PDF.js 6.1.200.
-The [library](https://github.com/unjs/unpdf) targets Worker-compatible PDF parsing.
-It is loaded on demand, without canvas rendering or image decoding. Synthetic
-runtime tests prohibit outbound parser requests. Existing kDrive authentication
-and version checks remain the only document-retrieval path.
+Cloudflare's PDF `toMarkdown` conversion was considered, but its documented
+[conversion process](https://developers.cloudflare.com/workers-ai/features/markdown-conversion/how-it-works/)
+uses existing text/structure, which does not establish scanned-page OCR.
 
-Alternative considered: Cloudflare's [toMarkdown](https://developers.cloudflare.com/workers-ai/features/markdown-conversion/)
-offers free conversion for most formats, but adds a processing service/binding
-and needs separate acceptance tests. Its documented [PDF conversion](https://developers.cloudflare.com/workers-ai/features/markdown-conversion/how-it-works/)
-uses tagged structure or existing page text; it does not establish scanned-PDF
-OCR. The local parser provides explicit page bounds and tested password handling
-without another service.
-
-## Tool contract and limits
+## Tool contract
 
 | Input | Behavior |
 | --- | --- |
-| `path` | Exact natural kDrive file path; no arbitrary source URLs |
+| `path` | Exact kDrive file path; arbitrary source URLs are not accepted |
 | `startPage` | One-based page, default 1 |
-| `pageCount` | 1–5 pages, default 5 |
-| `expectedSha256` | Optional complete-file digest; carry the first result's value on subsequent batches to reject version changes |
-| `password` | Optional user-authorized password; not guessed, echoed, cached or persisted by this tool |
+| `pageCount` | 1–5, default 5 for text/forms; exactly 1, default 1, with OCR |
+| `ocr` | Default false. Explicit true requires configured OCR and sends one rendered page to Workers AI |
+| `expectedSha256` | Carry the first result's digest on later batches to reject changed file versions |
+| `password` | Only a user-authorized password; never guessed, echoed or retained by the connector |
 
-Limits: 5 MiB original bytes, 200 document pages, five selected pages and 100,000
-extracted characters per call. The retrieval/parsing deadline is 20 seconds,
-checked cooperatively between operations. One PDF read per isolate is allowed;
-concurrent attempts receive `PDF_BUSY` without queueing sensitive inputs.
+Bounds: 5 MiB source, 200 document pages, 500 selected-page widgets and 100,000
+characters including serialized form data. OCR renders at up to 2× PDF scale,
+2 million pixels, 2,000 pixels per dimension and 4 MiB PNG. Output is limited to
+4,096 model tokens and 30,000 OCR characters. Small print on dense pages may be
+unreadable at these limits. Unknown/missing or truncated completion reasons fail
+closed; currently accepted stop markers are `stop`, `eos`, and `end_turn`.
+Their live model behavior must be checked before enabling OCR.
 
-Results include the complete-file byte length and SHA-256, `totalPages`, numbered
-`pages`, `hasMore`, `nextPage`, and extraction warnings. The checksum identifies
-the bytes read; without an independently supplied `expectedSha256`, it is not
-independent proof against an external source digest. Each batch re-downloads
-and validates the file, intentionally avoiding retained private PDF caches.
+The full operation has a 20-second deadline. AI inference receives an abort
+signal and a bounded wait; cancellation cannot guarantee upstream computation
+has stopped. Synchronous parsing/rendering cannot be interrupted by a timer.
+One PDF read per isolate is admitted; other attempts receive `PDF_BUSY`.
 
-The first implementation extracts the **text layer only**. It preserves page
-boundaries, but does not promise reading order, table reconstruction, image
-understanding, annotation text or filled form values. A page with no text is
-reported as `no_text`, with an explicit OCR/blank-page warning. It is never
-silently described as blank or successfully OCRed. These limitations matter for
-tax forms: extracted text alone is not proof that all filled fields were read.
+Results retain separate sources:
 
-Errors distinguish password required/incorrect, size/page/output limits, busy,
-timeout, changed versions, integrity mismatches and unsupported/damaged PDFs.
-Errors return no partial extracted content or raw parser/provider messages.
-The existing preview path now points PDF failures to `kdrive_read_pdf`; ordinary
-text reading and binary export remain available.
+- `pages[].text`: original text layer; `no_text` never implies a blank page.
+- `pages[].formFields`: stored AcroForm values, field names/types, button export
+  values and checked states, plus consistency issues.
+- `ocr`: optional page-numbered visual transcription, model, image dimensions
+  and `review_required`/`no_text_detected` status. It never overwrites form values
+  or original text, and no numeric confidence is invented.
+- Complete-file byte length/SHA-256, page continuation, form scope and warnings.
 
-## Privacy and runtime boundaries
+The digest identifies the bytes retrieved. Without an independently supplied
+expected digest, it is not external proof of the source hash. Each call
+re-downloads and re-verifies the file; private documents are not cached.
 
-The tool does not log, persist or cache document bytes, extracted text or
-passwords. PDF data still passes through Cloudflare and tool results enter the
-ChatGPT conversation. Password arguments are also subject to host history and
-retention; this is not a secret-input UI. Use only a user-authorized password.
-Document text remains untrusted data, never an instruction source.
+## Form reliability
 
-PDF parsing can allocate far more memory than the input size. Input, page and
-output caps do not eliminate decompression attacks. PDF.js assembles one page's
-text internally before the output check. A timer cannot preempt synchronous
-JavaScript, so the runtime CPU/memory ceiling remains the final backstop; a
-pathological PDF may terminate the isolate instead of returning a clean error.
-The limits are conservative bounds, not a guarantee for every PDF of that size.
+PDF.js resolves inherited field values. The reader cross-checks page widgets
+against matching entries in the document's AcroForm tree. It preserves empty
+values (never substituting defaults), Unicode strings, choice arrays and
+checkbox/radio selection values. Orphan widgets, conflicting values, mismatched
+tree entries, unsupported field types and scripted fields are flagged for review.
+Password field values are redacted. Scripts are never evaluated by the reader.
 
-## Verification and deployment gate
+`stored_value` means a consistent stored value, **not visual verification**.
+Stale appearance streams can disagree with `/V`; OCR may itself be mistaken.
+Resolve discrepancies before relying on amounts, dates or selected marks. Fields
+without widgets, widgets outside the selected pages, annotations, digital
+signature validity, calculations and XFA are not covered. XFA presence produces
+an explicit warning. Flattened forms have no stored fields and need text/OCR.
+Reading order and visual table layout are not guaranteed.
 
-Synthetic tests cover ordinary and AES-256 encrypted fixtures, missing/wrong
-passwords, compressed multi-page text and continuation hashes, an image-only
-page, malformed data, excess page/output/input bounds, short/long downloads,
-version changes at stream completion, concurrent reads and MCP tool discovery
-and invocation. No private tax document is used.
+## Configuration and privacy
 
-Validation passed: 175 root tests, 25 Worker tests, two real-workerd HTTP tests
-and two independent-client/Python PDF integration tests (204 total), plus both
-TypeScript checks and the Node build. The Python integration suite used the
-bundled workspace Python because the system Python does not include `pypdf`.
+Checked-in configuration has `KDRIVE_PDF_OCR_ENABLED="false"` and no AI binding.
+Text and forms require no new service. An explicit OCR request returns
+`PDF_OCR_UNAVAILABLE` before any download unless both flag and binding exist.
+Node stdio has no configured OCR provider; text and forms continue to work.
 
-The real local workerd HTTP test runs the read inside a SQLite Durable Object.
-It extracts `ORCHID-7319` from both ordinary and correctly unlocked fixtures,
-rejects missing/wrong passwords and asserts zero external requests. Initial
-local calls took approximately 30–65 ms wall time; these are **not production
-CPU measurements**. Miniflare does not certify account quotas or Free CPU limits.
+For a later, separately authorized enablement, add the Wrangler AI binding
+`"ai": { "binding": "AI" }` and set the flag to `"true"`, keeping Workers Free.
+Do not enable it before synthetic live acceptance. Workers AI development calls
+can use remote inference; local test suites instead supply mocks and block
+outbound network. No binding or account setting was changed remotely in this work.
 
-The full Worker dry build measured 5692.60 KiB uncompressed and
-1164.05 KiB compressed. No upload or deployment was performed. Parser code is
-lazy-loaded, but production startup time still requires a later platform check.
+No document bytes, extracted data or passwords are logged/cached/persisted by
+these modules. OCR sends the **visible page image** to Cloudflare AI: it may
+contain sensitive document content, though source paths, URLs, filenames and
+password arguments are not included as model parameters. Cloudflare AI data
+policies and host conversation retention apply. All extracted content is
+untrusted document data, never an instruction source. Errors are sanitized.
 
-Reproduce locally with `npm test`, `npm run check`, `npm run build`, and, in
-`remote`, `npm run type-check`, `npm test`, and `npm run test:http`. The HTTP
-suite includes the new Durable Object parser test. Install dependencies in both
-the repository root and `remote` first.
+Compressed PDFs can consume much more memory than their file size. PDF.js
+assembles a page's text/forms before output checks; PDFium decoding also allocates
+internally. Runtime CPU/memory limits remain the backstop, and pathological
+files may terminate the isolate. These bounds do not guarantee every input fits.
 
-Before any later release, authorize deployment separately, then test a
-synthetic kDrive PDF through the actual ChatGPT tool, measure Free-plan CPU,
-memory and startup behavior, and verify continuation/password/no-text behavior.
-Scanned OCR, form-value extraction, larger documents and full visual fidelity
-remain separate work. Capability revision `2026-10-13.3` identifies this source
-change; it does not claim the currently deployed connector has the new tool.
+## Test evidence and release gates
+
+Synthetic local tests cover text, AES-256 encrypted PDFs, missing/wrong passwords,
+checksums/version changes, pagination, malformed inputs, bounds and concurrent
+reads. New tests cover actual parsed hierarchical forms, checkbox/radio/choice
+values, empty/default distinction, redaction, orphan/conflicting widgets and
+output caps. A rendered fixture is flattened into an image-only PDF in memory;
+its download/hash/render/OCR response path uses a **mock transcription**.
+
+Real local workerd tests render ordinary/encrypted PDFs from bundled WASM inside
+a SQLite Durable Object, verify PNG signatures and pixel bounds, and exercise
+the combined extraction/render/model-adapter path. Outbound requests are blocked
+and asserted to be zero. Model tests cover input/cancellation contracts, malformed,
+truncated/unknown and oversized responses, provider failures, timeout and no retry.
+These establish plumbing and error behavior, **not live recognition accuracy**.
+No private tax files were accessed or used as fixtures.
+
+Validation passed: 185 root tests, 25 Worker tests, three local workerd HTTP
+tests and two independent-client/Python integration tests (215 total), both
+TypeScript checks and the Node build. The final local dry build produced
+11,261.08 KiB uncompressed (3,652.14 KiB gzip), below the documented Free bundle
+limit. Wrangler printed its dry-run completion but its process stayed alive;
+the completed local build processes were terminated without uploading anything.
+Local tests are not production CPU, startup or memory measurements.
+
+Run root `npm run check`, `npm test`, `npm run build`, `npm run test:pdf`; then
+remote `npm run type-check`, `npm test`, `npm run test:http`. Python integration
+requires `pypdf`; `KDRIVE_TEST_PYTHON` can select the bundled workspace Python.
+Install both root and remote dependencies. CI runs on macOS and Ubuntu and does
+not deploy. A local dry build is permitted; no upload/deployment was performed.
+
+Before enabling/releasing OCR, separately authorize synthetic live testing and
+deployment. Check model completion markers and accuracy on scanned amounts,
+checkboxes, rotation, mixed image/text, small print and multiple languages.
+Compare stored form values against appearances, measure production Free CPU,
+memory/startup and quota failures, and exercise the actual ChatGPT tool flow.
+The checked-in OCR feature stays disabled until those checks pass.

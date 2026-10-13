@@ -24,6 +24,8 @@
 	 * npx wrangler secret put KDRIVE_OPERATION_SECRET
    */
   "vars": {
+    // OCR remains opt-in. See docs/pdf-extraction.md before adding an AI binding.
+    "KDRIVE_PDF_OCR_ENABLED": "false",
     "KDRIVE_MAX_BINARY_BYTES": "104857600",
     "KDRIVE_BINARY_SOURCE_HOSTS": "files.oaiusercontent.com,sandbox.openai.com,sdmntprcentralus.oaiusercontent.com,sdmntprnorthcentralus.oaiusercontent.com,sdmntprsoutheastus3.oaiusercontent.com,sdmntpreastus2.oaiusercontent.com,oaisdmntprnorthcentralus.blob.core.windows.net,sdmntprbrazilsouth.oaiusercontent.com,sdmntprsouthcentralus.oaiusercontent.com,sdmntprwestus.oaiusercontent.com,sdmntprnortheu.oaiusercontent.com",
 		"ALLOWED_GITHUB_LOGIN": "mxpf",

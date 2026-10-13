@@ -1,16 +1,19 @@
 // Only run inside the MCP Durable Object (or Node), never the public HTTP route.
 // Timers cannot preempt synchronous PDF parsing; the runtime CPU/memory ceiling
 // remains the final backstop for malicious compressed PDFs.
-export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, timeoutMs: 20_000 } as const;
+import { extractFormFields, type PdfFormField } from "./pdf-forms.js";
+export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, fieldsPerCall: 500, timeoutMs: 20_000 } as const;
 
 export class PdfReadError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "PdfReadError"; }
 }
 
-export interface PdfReadOptions { startPage?: number; pageCount?: number; password?: string }
+export interface PdfReadOptions { startPage?: number; pageCount?: number; password?: string; ocr?: boolean }
 
 export function validatePdfOptions(options: PdfReadOptions) {
-  const startPage = options.startPage ?? 1, pageCount = options.pageCount ?? PDF_LIMITS.pagesPerCall;
+  const startPage = options.startPage ?? 1, pageCount = options.pageCount ?? (options.ocr ? 1 : PDF_LIMITS.pagesPerCall);
+  if (options.ocr !== undefined && typeof options.ocr !== "boolean") throw new PdfReadError("PDF_OCR_OPTIONS", "ocr must be a boolean.");
+  if (options.ocr && pageCount !== 1) throw new PdfReadError("PDF_OCR_PAGE_LIMIT", "OCR supports one page per call. Set pageCount to 1.");
   if (!Number.isSafeInteger(startPage) || startPage < 1 || !Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > PDF_LIMITS.pagesPerCall) {
     throw new PdfReadError("PDF_PAGE_RANGE", "Choose a positive startPage and between 1 and 5 pages.");
   }
@@ -42,16 +45,25 @@ export async function extractPdf(bytes: Uint8Array, options: PdfReadOptions = {}
     if (pdf.numPages > PDF_LIMITS.documentPages) throw new PdfReadError("PDF_PAGE_LIMIT", "PDF extraction supports documents up to 200 pages.");
     if (startPage > pdf.numPages) throw new PdfReadError("PDF_PAGE_RANGE", "startPage is beyond the last PDF page.");
     const endPage = Math.min(pdf.numPages, startPage + pageCount - 1);
-    const pages: Array<{ page: number; text: string; status: "text" | "no_text" }> = [];
+    const tree = await pdf.getFieldObjects();
+    const metadata = await pdf.getMetadata();
+    const xfaPresent = Boolean((metadata.info as { IsXFAPresent?: boolean }).IsXFAPresent);
+    const pages: Array<{ page: number; text: string; status: "text" | "no_text"; formFields: PdfFormField[] }> = [];
     let characters = 0;
+    let fieldCount = 0;
     for (let number = startPage; number <= endPage; number++) {
       signal.throwIfAborted();
       const page = await pdf.getPage(number);
       const parts: string[] = [];
+      let formFields: PdfFormField[] = [];
       try {
         // PDF.js assembles one page internally. Do not cancel its text stream
         // mid-page: the serverless build can reject pending stream callbacks.
         const content = await page.getTextContent();
+        formFields = extractFormFields(await page.getAnnotations(), tree);
+        fieldCount += formFields.length;
+        characters += JSON.stringify(formFields).length;
+        if (fieldCount > PDF_LIMITS.fieldsPerCall || characters > PDF_LIMITS.characters) throw new PdfReadError("PDF_OUTPUT_LIMIT", "Selected form fields exceed the output limit. Request fewer pages.");
         signal.throwIfAborted();
         for (const item of content.items) {
           if (!("str" in item)) continue;
@@ -62,15 +74,18 @@ export async function extractPdf(bytes: Uint8Array, options: PdfReadOptions = {}
         }
       } finally { page.cleanup(); }
       const text = parts.join("").trim();
-      pages.push({ page: number, text, status: text ? "text" : "no_text" });
+      pages.push({ page: number, text, status: text ? "text" : "no_text", formFields });
     }
     signal.throwIfAborted();
     return {
       totalPages: pdf.numPages, startPage, endPage, pages,
       hasMore: endPage < pdf.numPages, nextPage: endPage < pdf.numPages ? endPage + 1 : null,
       extraction: "pdf_text_layer" as const,
+      forms: { source: "acroform_stored_values" as const, xfaPresent, appearanceVerified: false, scope: "widgets_on_selected_pages" as const },
       warnings: [
-        "Text-layer extraction only; reading order and table layout may differ from the visual PDF. Images, annotations and form values may be missing.",
+        "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+        "Form values are stored PDF values, not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+        ...(xfaPresent ? ["XFA forms are unsupported; AcroForm values may be incomplete or stale. Review the rendered page using OCR or a PDF viewer."] : []),
         ...(pages.some(p => p.status === "no_text") ? ["Some selected pages contain no extractable text. They may be blank or require OCR; no OCR was performed."] : []),
       ],
     };

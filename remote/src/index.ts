@@ -14,6 +14,9 @@ import { CONNECTOR_VERSION, connectorDiagnostics } from "../../src/connector-dia
 export { KDriveOperationNonceStore } from "./operation-nonce-store";
 export { KDriveBinaryDigestStore } from "./binary-digest-store";
 import { digestStoreName } from "./binary-digest-store";
+import { cloudflareOcrProvider } from "../../src/pdf-ocr.js";
+import { renderPdfPage } from "../../src/pdf-render.js";
+import pdfiumWasm from "@hyzyla/pdfium/pdfium.wasm";
 
 function positiveInteger(value: string, name: string): number {
 	const parsed = Number(value);
@@ -63,6 +66,10 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		const digestStore = this.env.KDRIVE_BINARY_DIGESTS.getByName(digestStoreName(subject, driveId));
 
 		registerKDriveTools(this.server, client, {
+			pdfOcrRuntime: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && this.env.AI ? {
+				provider: cloudflareOcrProvider(this.env.AI),
+				render: (bytes, page, password) => renderPdfPage(bytes, page, password, pdfiumWasm),
+			} : undefined,
 			digestCache: { get: (identity) => digestStore.getDigest(identity), set: (identity, digest) => digestStore.putDigest(identity, digest) },
 			driveId,
 			maxReadBytes,
@@ -85,7 +92,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 				const drive = await client.getDrive(driveId);
 				return {
 					connected: true,
-					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, digestCacheScope: "authenticated_owner_drive",
+					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, pdfOcr: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI), digestCacheScope: "authenticated_owner_drive",
 						maxReadBytes, maxUploadBytes, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
 					authentication: "OAuth-protected remote connector",
 					drive: {
