@@ -26,7 +26,7 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
             render: (bytes, page, password) => renderPdfPage(bytes, page, password, wasm),
             provider: cloudflareOcrProvider({ run: async (model, payload) => {
               if (!payload.image.startsWith('data:image/png;base64,iVBOR')) throw new Error('Invalid PNG input');
-              return { answer: 'MOCK OCR RESPONSE', finish_reason: 'stop' };
+              return { result: { answer: 'MOCK OCR RESPONSE', finish_reason: 'stop' }, usage: { neurons: 30 } };
             } }),
           });
           return Response.json(result);

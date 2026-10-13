@@ -96,10 +96,20 @@ test('model adapter sends only rendered bytes and forwards cancellation, rejects
   } });
   assert.equal(await provider.recognize(new Uint8Array([1,2,3]),signal),'SYNTHETIC');
   assert.equal(calls,1);
-  for (const result of [{answer:'partial',finish_reason:'length'},{answer:'unknown'},{answer:'unknown',finish_reason:'future_reason'}]) {
+  for (const result of [{answer:'partial',finish_reason:'length'},{answer:'unknown'},{answer:'unknown',finish_reason:'future_reason'},{answer:'unknown',finish_reason:'eos'},{answer:'unknown',finish_reason:'end_turn'}]) {
     await assert.rejects(cloudflareOcrProvider({run:async()=>result}).recognize(new Uint8Array(),signal),code('PDF_OCR_INCOMPLETE'));
   }
   await assert.rejects(cloudflareOcrProvider({run:async()=>({answer:'x'.repeat(30001),finish_reason:'stop'})}).recognize(new Uint8Array(),signal),code('PDF_OCR_OUTPUT_LIMIT'));
+});
+
+test('model adapter accepts the live Cloudflare envelope and validates its completion', async () => {
+  const signal = new AbortController().signal;
+  assert.equal(await cloudflareOcrProvider({run:async()=>({
+    result:{answer:'LIVE ENVELOPE SHAPE',finish_reason:'stop',caption:null,reasoning:null},
+    usage:{prompt_tokens:789,completion_tokens:95,neurons:30.1545467376709},
+  })}).recognize(new Uint8Array([1]),signal),'LIVE ENVELOPE SHAPE');
+  await assert.rejects(cloudflareOcrProvider({run:async()=>({result:{answer:'partial',finish_reason:'length'}})}).recognize(new Uint8Array(),signal),code('PDF_OCR_INCOMPLETE'));
+  await assert.rejects(cloudflareOcrProvider({run:async()=>({result:null})}).recognize(new Uint8Array(),signal),code('PDF_OCR_FAILED'));
 });
 
 test('OCR failure and deadline return safe errors, never retry or leak provider details', async () => {

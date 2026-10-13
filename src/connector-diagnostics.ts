@@ -3,7 +3,7 @@ import { DIGEST_CACHE_MAX_ENTRIES, DIGEST_CACHE_TTL_MS } from "./binary-digest-c
 import { PDF_LIMITS } from "./pdf-extract.js";
 
 export const CONNECTOR_VERSION = "0.3.1";
-export const CAPABILITY_REVISION = "2026-10-13.4";
+export const CAPABILITY_REVISION = "2026-10-13.5";
 
 // A deployment ID identifies the actual running Worker, not the client's catalog.
 // Local builds deliberately report unknown rather than inventing a Git revision.

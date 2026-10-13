@@ -27,7 +27,7 @@ These are recorded observations, not guarantees for every host or account.
 | Presentation | Rich cards and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
 | Binary uploads | Native host file adapter, bounded streaming, checksums, no base64 in model context | Host must resolve the file; exact source-host allowlist can reject newly selected regions |
 | Binary exports | Short-lived raw-byte references, pinned version, size and SHA-256 | Downstream tools must support that reference or an explicit import bridge |
-| Direct PDF reading (source; undeployed) | Page-numbered PDF text returned to ChatGPT without Adobe or re-upload | Text and stored forms; 5 MiB, 200 pages; optional one-page OCR remains disabled pending live validation |
+| Direct PDF reading (source; undeployed) | Page-numbered PDF text returned to ChatGPT without Adobe or re-upload | Text and stored forms; 5 MiB, 200 pages; optional one-page OCR remains disabled after accuracy failures |
 | Local large-file transfers | Direct kDrive upload/download with independent SHA-256 verification, bypassing the Worker | Local credentials and files required; 1 GiB ceiling, with one live 269 MB round trip verified |
 
 Live checks passed for synthetic PNG, SVG, PDF, ZIP-format, and Markdown files,
@@ -294,8 +294,9 @@ page-numbered text directly. It bypasses the Adobe attachment handoff. Start wit
 `expectedSha256` on later calls. Password-protected PDFs accept an optional
 user-authorized password. Stored form values now include consistency checks.
 Optional `ocr=true` renders one page for Cloudflare Workers AI; it remains
-disabled pending live validation. OCR is unverified, and XFA, form appearances
-and visual table structure are not guaranteed. This implementation is **not deployed yet**; see
+disabled after synthetic live tests found errors in rotated/small-print amounts
+and omitted checkbox states. XFA, form appearances and visual table structure
+are not guaranteed. This implementation is **not deployed yet**; see
 [limits and verification](docs/pdf-extraction.md).
 
 For binary files, use **native file reference first, signed HTTPS fallback, inline base64 only for small files**. The model exchanges references and metadata, not file bytes.

@@ -62,7 +62,7 @@ c.showPage();c.save()
 fields=PdfReader(dest).get_fields()
 expected_fields={'entity':'CEDAR TEST LLC','amount':'12345.67','resident':'/Yes','nonresident':'/Off','category':'Business'}
 assert all(str(fields[k]['/V'])==v for k,v in expected_fields.items())
-manifest.append({'name':'forms','file':dest.name,'expected':['SYNTHETIC FORM','CEDAR TEST LLC','12345.67','Resident','Nonresident','Business'],'fields':expected_fields,'kind':'form'})
+manifest.append({'name':'forms','file':dest.name,'expected':['SYNTHETIC FORM','CEDAR TEST LLC','12345.67','[X] Resident','[ ] Nonresident','Business'],'fields':expected_fields,'kind':'form'})
 writer=PdfWriter();writer.clone_document_from_reader(PdfReader(out/'scan.pdf'))
 writer.encrypt('synthetic-open-password', owner_password='synthetic-owner-password', algorithm='AES-256')
 writer.write(out/'encrypted-scan.pdf')

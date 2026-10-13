@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readKDrivePdf } from '../src/pdf-tools.js';
 import { renderPdfPage } from '../src/pdf-render.js';
 import { cloudflareOcrProvider } from '../src/pdf-ocr.js';
+import { missingOcrText } from './lib/ocr-acceptance.js';
 
 const args = process.argv.slice(2);
 const value = (key: string) => args[args.indexOf(key) + 1];
@@ -36,7 +37,6 @@ if (live) {
   } catch { throw new Error('Cloudflare credentials unavailable. Sign in with Wrangler; no credential details are printed.'); }
 }
 const report: any = { date: new Date().toISOString(), live, syntheticOnly:true, calls:0, cases:[], deploymentPerformed:false };
-const normalize = (text: string) => text.normalize('NFC').replace(/[\s*`]+/g,' ').trim().toLowerCase();
 const reportPath = join(directory, live ? 'live-report.json' : 'local-report.json');
 for (const fixture of manifest.cases) {
   const bytes = new Uint8Array(await readFile(join(directory,fixture.file)));
@@ -53,8 +53,11 @@ for (const fixture of manifest.cases) {
         redirect:'error',
       });
       const body = await response.json() as any;
-      wire = { httpStatus:response.status, finishReason:body.result?.finish_reason, metrics:body.result?.metrics,
-        usage:body.result?.usage, errorCodes:body.errors?.map((e:any)=>e.code), answer:body.result?.answer };
+      const output = body.result?.result ?? body.result;
+      wire = { httpStatus:response.status, finishReason:output?.finish_reason, metrics:output?.metrics,
+        usage:body.result?.usage, errorCodes:body.errors?.map((e:any)=>e.code), answer:output?.answer,
+        // Synthetic-only evidence: preserve the actual model contract for review.
+        result:body.result };
       if (!response.ok || body.success === false) throw new Error(`Cloudflare inference HTTP ${response.status}`);
       return body.result;
     } }) : undefined;
@@ -77,7 +80,7 @@ for (const fixture of manifest.cases) {
     row.sha256=result.sha256; row.textLayer=result.pages[0].text; row.formFields=result.pages[0].formFields;
     row.ocr=result.ocr;
     row.expectedText=fixture.expected;
-    if (live) row.missingText=fixture.expected.filter((line:string)=>!normalize(result.ocr?.text??'').includes(normalize(line)));
+    if (live) row.missingText=missingOcrText(fixture.expected, result.ocr?.text ?? '');
     if (fixture.fields) row.formMismatches=Object.entries(fixture.fields).filter(([name,val])=>{
       const field=result.pages[0].formFields.find(f=>f.name===name);
       const expected=String(val).replace(/^\//,'');
@@ -95,4 +98,5 @@ for (const fixture of manifest.cases) {
   if(live && row.status==='failed') break;
 }
 console.log(JSON.stringify({report:reportPath,calls:report.calls}));
-if(report.cases.some((c:any)=>c.status==='failed'||c.formMismatches?.length)) process.exitCode=1;
+// Accuracy failures are release-gate failures, even when inference returned HTTP 200.
+if(report.cases.length !== allowed.length || report.cases.some((c:any)=>c.status==='failed'||c.status==='review_required'||c.formMismatches?.length)) process.exitCode=1;

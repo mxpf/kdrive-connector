@@ -1,0 +1,539 @@
+{
+  "date": "2026-10-13T21:12:53.679Z",
+  "live": true,
+  "syntheticOnly": true,
+  "calls": 7,
+  "cases": [
+    {
+      "name": "scan",
+      "byteLength": 38458,
+      "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+      "textLayer": "",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\n\nTax year: 2025\n\nGross amount: $12,345.67\n\nDeduction: $890.12\n\nNet amount: $11,455.55\n\nPayment date: 2025-12-31\n\n[X] Resident [ ] Nonresident",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD",
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident"
+      ],
+      "missingText": [],
+      "status": "expected_text_matched",
+      "wallMs": 2424,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 95,
+          "total_tokens": 884,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 30.1545467376709
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\n\nTax year: 2025\n\nGross amount: $12,345.67\n\nDeduction: $890.12\n\nNet amount: $11,455.55\n\nPayment date: 2025-12-31\n\n[X] Resident [ ] Nonresident",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 1081.6910719731825,
+              "input_tokens": 789,
+              "output_tokens": 95,
+              "prefill_time_ms": 163.79508702084422,
+              "ttft_ms": 230.86701205465943
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 95,
+            "total_tokens": 884,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 30.1545467376709
+          }
+        }
+      }
+    },
+    {
+      "name": "rotated",
+      "byteLength": 38382,
+      "sha256": "1cd0cbc37e1bc4bd71453ad9a4e59fdc32585ef01f0acecbcd5d97d410b10131",
+      "textLayer": "",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFax: CEDAR-4826\nTax year: 2025\nGross amount: $13,345.67\nDeduction: $8,090.12\nResident: [Nonresident]\nPayment date: 2025-12-31",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1584,
+        "imageHeight": 1224
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD",
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident"
+      ],
+      "missingText": [
+        "Fixture: CEDAR-4826",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "[X] Resident   [ ] Nonresident"
+      ],
+      "status": "review_required",
+      "wallMs": 1901,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 77,
+          "total_tokens": 866,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 28.5181827545166
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFax: CEDAR-4826\nTax year: 2025\nGross amount: $13,345.67\nDeduction: $8,090.12\nResident: [Nonresident]\nPayment date: 2025-12-31",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 1073.363051051274,
+              "input_tokens": 789,
+              "output_tokens": 77,
+              "prefill_time_ms": 160.6308459304273,
+              "ttft_ms": 263.3131470065564
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 77,
+            "total_tokens": 866,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 28.5181827545166
+          }
+        }
+      }
+    },
+    {
+      "name": "mixed",
+      "byteLength": 38525,
+      "sha256": "623432857e3556923093ac332e80bd88dcc989d17f35c639ccd32e1ca9883e4c",
+      "textLayer": "MIXED TEXT LAYER: CEDAR-4826",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "MIXED TEXT LAYER: CEDAR-4826\nSYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD",
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident",
+        "MIXED TEXT LAYER: CEDAR-4826"
+      ],
+      "missingText": [],
+      "status": "expected_text_matched",
+      "wallMs": 1831,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 105,
+          "total_tokens": 894,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 31.063636779785156
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "MIXED TEXT LAYER: CEDAR-4826\nSYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 1174.3452369701115,
+              "input_tokens": 789,
+              "output_tokens": 105,
+              "prefill_time_ms": 180.46948907431215,
+              "ttft_ms": 229.9645870225504
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 105,
+            "total_tokens": 894,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 31.063636779785156
+          }
+        }
+      }
+    },
+    {
+      "name": "small-print",
+      "byteLength": 22428,
+      "sha256": "16b64b1c616889873d3b36ad74872d0f9c466f8ba3b3bda264dc4816cc913077",
+      "textLayer": "",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nCEDAR 4826\nTax: 2025\nGross amount: $12,345.67\nDeduction amount: $11,455.12\nNet amount: 2025.12-31\nResident [ 1 ] Nonresident\nSmall print: 0.01 1.001.10 0.10.01 -42.50",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD",
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident",
+        "Small print: 0.01  1,001.10  10,010.01  -42.50"
+      ],
+      "missingText": [
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident",
+        "Small print: 0.01  1,001.10  10,010.01  -42.50"
+      ],
+      "status": "review_required",
+      "wallMs": 2065,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 99,
+          "total_tokens": 888,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 30.5181827545166
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nCEDAR 4826\nTax: 2025\nGross amount: $12,345.67\nDeduction amount: $11,455.12\nNet amount: 2025.12-31\nResident [ 1 ] Nonresident\nSmall print: 0.01 1.001.10 0.10.01 -42.50",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 1351.9652480026707,
+              "input_tokens": 789,
+              "output_tokens": 99,
+              "prefill_time_ms": 174.58894907031208,
+              "ttft_ms": 317.33924604486674
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 99,
+            "total_tokens": 888,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 30.5181827545166
+          }
+        }
+      }
+    },
+    {
+      "name": "multilingual",
+      "byteLength": 22845,
+      "sha256": "10f8e3da8104ae8469ec51148c6943a7ca6c11563e390ecad633f88441ae5ffa",
+      "textLayer": "",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC OCR TEST - FICTIONAL VALUES\n\nName: Anna Müller\nReçu: déjà payé\nBetrag: 1.234,56 EUR\nRéférence: ÉTÉ-2025",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - FICTIONAL VALUES",
+        "Name: Anna Müller",
+        "Reçu: déjà payé",
+        "Betrag: 1.234,56 EUR",
+        "Référence: ÉTÉ-2025"
+      ],
+      "missingText": [],
+      "status": "expected_text_matched",
+      "wallMs": 1333,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 56,
+          "total_tokens": 845,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 26.609092712402344
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC OCR TEST - FICTIONAL VALUES\n\nName: Anna Müller\nReçu: déjà payé\nBetrag: 1.234,56 EUR\nRéférence: ÉTÉ-2025",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 608.3695240085945,
+              "input_tokens": 789,
+              "output_tokens": 56,
+              "prefill_time_ms": 228.1907059950754,
+              "ttft_ms": 255.0064231036231
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 56,
+            "total_tokens": 845,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 26.609092712402344
+          }
+        }
+      }
+    },
+    {
+      "name": "forms",
+      "byteLength": 9034,
+      "sha256": "1354b161bc1808407c05ae23ebdae700e61cacd4ba6ab9da75ec5301d60bb939",
+      "textLayer": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+      "formFields": [
+        {
+          "name": "entity",
+          "type": "Tx",
+          "value": "CEDAR TEST LLC",
+          "status": "stored_value",
+          "issues": []
+        },
+        {
+          "name": "amount",
+          "type": "Tx",
+          "value": "12345.67",
+          "status": "stored_value",
+          "issues": []
+        },
+        {
+          "name": "resident",
+          "type": "Btn",
+          "value": "Yes",
+          "status": "stored_value",
+          "issues": [],
+          "exportValue": "Yes",
+          "checked": true
+        },
+        {
+          "name": "nonresident",
+          "type": "Btn",
+          "value": "Off",
+          "status": "stored_value",
+          "issues": [],
+          "exportValue": "Yes",
+          "checked": false
+        },
+        {
+          "name": "category",
+          "type": "Ch",
+          "value": [
+            "Business"
+          ],
+          "status": "stored_value",
+          "issues": []
+        }
+      ],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC FORM - FICTIONAL VALUES\n\nEntity\nCEDAR TEST LLC\n\nGross amount\n12345.67\n\nResident\nNonresident\n\nCategory\nBusiness",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC FORM",
+        "CEDAR TEST LLC",
+        "12345.67",
+        "Resident",
+        "Nonresident",
+        "Business"
+      ],
+      "missingText": [],
+      "formMismatches": [],
+      "status": "expected_text_matched",
+      "wallMs": 1149,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 48,
+          "total_tokens": 837,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 25.881818771362305
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC FORM - FICTIONAL VALUES\n\nEntity\nCEDAR TEST LLC\n\nGross amount\n12345.67\n\nResident\nNonresident\n\nCategory\nBusiness",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 556.7813370143995,
+              "input_tokens": 789,
+              "output_tokens": 48,
+              "prefill_time_ms": 165.61384196393192,
+              "ttft_ms": 232.1978189283982
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 48,
+            "total_tokens": 837,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 25.881818771362305
+          }
+        }
+      }
+    },
+    {
+      "name": "encrypted-scan",
+      "byteLength": 39607,
+      "sha256": "f842ad47dba5f029e701863dd0552b66354a7ef0abdfbaf82da261f73fcd083e",
+      "textLayer": "",
+      "formFields": [],
+      "ocr": {
+        "page": 1,
+        "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\n\nTax year: 2025\n\nGross amount: $12,345.67\n\nDeduction: $890.12\n\nNet amount: $11,455.55\n\nPayment date: 2025-12-31\n\n[X] Resident [ ] Nonresident",
+        "source": "cloudflare_workers_ai",
+        "model": "@cf/moondream/moondream3.1-9B-A2B",
+        "status": "review_required",
+        "imageWidth": 1224,
+        "imageHeight": 1584
+      },
+      "expectedText": [
+        "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD",
+        "Fixture: CEDAR-4826",
+        "Tax year: 2025",
+        "Gross amount: $12,345.67",
+        "Deduction: $890.12",
+        "Net amount: $11,455.55",
+        "Payment date: 2025-12-31",
+        "[X] Resident   [ ] Nonresident"
+      ],
+      "missingText": [],
+      "status": "expected_text_matched",
+      "wallMs": 1661,
+      "provider": {
+        "httpStatus": 200,
+        "usage": {
+          "prompt_tokens": 789,
+          "completion_tokens": 95,
+          "total_tokens": 884,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 30.1545467376709
+        },
+        "errorCodes": [],
+        "result": {
+          "result": {
+            "answer": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\n\nFixture: CEDAR-4826\n\nTax year: 2025\n\nGross amount: $12,345.67\n\nDeduction: $890.12\n\nNet amount: $11,455.55\n\nPayment date: 2025-12-31\n\n[X] Resident [ ] Nonresident",
+            "caption": null,
+            "finish_reason": "stop",
+            "metrics": {
+              "decode_time_ms": 1032.5018080184236,
+              "input_tokens": 789,
+              "output_tokens": 95,
+              "prefill_time_ms": 25.81264590844512,
+              "ttft_ms": 28.500381973572075
+            },
+            "objects": null,
+            "points": null,
+            "reasoning": null
+          },
+          "usage": {
+            "prompt_tokens": 789,
+            "completion_tokens": 95,
+            "total_tokens": 884,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "neurons": 30.1545467376709
+          }
+        }
+      }
+    }
+  ],
+  "deploymentPerformed": false
+}
