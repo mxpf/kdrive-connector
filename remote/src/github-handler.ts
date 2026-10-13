@@ -46,7 +46,7 @@ app.use("*", async (c, next) => {
 	});
 });
 
-app.on(["GET", "HEAD"], "/binary/:token", async (c) => {
+app.all("/binary/:token", async (c) => {
 	const client = new KDriveClient({
 		apiBaseUrl: "https://api.infomaniak.com", authorizeUrl: "", tokenUrl: "", redirectUri: "",
 		oauthScope: "drive", tokenFile: "", maxReadBytes: 0, maxUploadBytes: 0,

@@ -1,5 +1,7 @@
 # Binary interoperability: live acceptance
 
+Latest investigation: [0.3.1 binary interoperability, 2026-10-13](binary-interop-0.3.1.md). The evidence below is historical.
+
 Evidence dates: 2026-09-29 through 2026-10-11. This records observed results, not universal host guarantees.
 
 ## Local direct transfer — 2026-10-11

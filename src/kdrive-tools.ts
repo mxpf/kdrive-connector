@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { TextPreviewUnavailableError } from "./errors.js";
 import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -277,6 +278,10 @@ function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {
 }
 
 function errorContent(error: unknown) {
+  if (error instanceof TextPreviewUnavailableError) {
+    const result = { error_code: error.code, message: error.message, next_tool: "kdrive_export_file" };
+    return { isError: true, structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+  }
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }

@@ -6,10 +6,21 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { KDriveClient } from "../src/kdrive-client.js";
 import { registerKDriveTools } from "../src/kdrive-tools.js";
+import { TextPreviewUnavailableError } from "../src/errors.js";
 import { generateOperationSecret, MemoryOperationNonceStore } from "../src/operation-token.js";
 
 type Result = { content: Array<{ type: string; text?: string }>; structuredContent?: Record<string, any>; isError?: boolean };
 type Handler = (args: Record<string, unknown>) => Promise<Result>;
+
+test("missing PDF previews provide a structured export recovery action", async () => {
+  const h = fixture();
+  h.client.downloadText = async () => { throw new TextPreviewUnavailableError(); };
+  const result = await h.run("read_file", { path: h.file.path, mode: "text" });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent?.error_code, "TEXT_PREVIEW_UNAVAILABLE");
+  assert.equal(result.structuredContent?.next_tool, "kdrive_export_file");
+  assert.deepEqual(JSON.parse(result.content[0].text!), result.structuredContent);
+});
 function fixture(bytes = Buffer.from("hello"), server?: McpServer) {
   const file = { id: 2, path: "/Private/test.md", name: "test.md", type: "file", size: bytes.length, etag: "private-version" };
   const folder = { id: 1, path: "/Private", name: "Private", type: "dir" };

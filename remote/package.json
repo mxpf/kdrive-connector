@@ -9,7 +9,8 @@
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
 		"type-check": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:http": "node --test test-http/*.test.mjs"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.8.1",
@@ -29,6 +30,8 @@
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.22.0",
 		"@types/node": "^26.0.0",
+		"esbuild": "0.28.2",
+		"miniflare": "5.20260918.0-alpha",
 		"typescript": "6.0.3",
 		"vitest": "^4.1.0",
 		"wrangler": "^4.135.0"

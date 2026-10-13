@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { BINARY_CHUNK_BYTES, BinaryTransferError, binaryChunks, fetchBinarySource, classifyBinaryFailure } from "./binary-transport.js";
 import type { AppConfig } from "./config.js";
-import { KDriveApiError } from "./errors.js";
+import { KDriveApiError, TextPreviewUnavailableError } from "./errors.js";
 import {
   logOperationalInfo,
   operationalErrorCode,
@@ -567,22 +567,39 @@ export class KDriveClient {
         headers: { accept: "*/*" },
         diagnostics: { operation: "preview" },
       });
+      // A provider may return the original PDF or an HTML error with HTTP 200.
+      // Neither is a usable conversion; never decode binary bytes as UTF-8.
+      const contentType = response.headers.get("content-type") ?? "text/plain";
+      if (!isTextContentType(contentType) || contentType.split(";", 1)[0].trim().toLowerCase() === "text/html") {
+        await response.body?.cancel();
+        throw new TextPreviewUnavailableError();
+      }
       return {
         bytes: await readResponseBytes(response, options.maxBytes),
-        contentType: response.headers.get("content-type") ?? "text/plain",
+        contentType,
         textSource: "converted",
       };
     } catch (previewError) {
       if (previewError instanceof ResponseBodyLimitError) throw previewError;
+      if (previewError instanceof KDriveApiError && [401, 403, 429].includes(previewError.status)) throw previewError;
       try {
-        return {
-          ...await this.download(driveId, fileId, { convertAs: "text", maxBytes: options.maxBytes }),
-          textSource: "converted",
-        };
+        const response = await this.rawRequest(`/2/drive/${driveId}/files/${fileId}/download`, {
+          query: { as: "text" }, headers: { accept: "*/*" }, diagnostics: { operation: "download" },
+        });
+        const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+        if (!isTextContentType(contentType) || contentType.split(";", 1)[0].trim().toLowerCase() === "text/html") {
+          await response.body?.cancel();
+          throw new TextPreviewUnavailableError();
+        }
+        return { bytes: await readResponseBytes(response, options.maxBytes), contentType, textSource: "converted" };
       } catch (conversionError) {
         if (conversionError instanceof ResponseBodyLimitError) throw conversionError;
+        if (conversionError instanceof KDriveApiError && [401, 403, 429].includes(conversionError.status)) throw conversionError;
+        // Do not fetch a known binary a third time and mask a missing preview
+        // with the inline byte limit. Unknown MIME types retain the text fallback.
+        if (file.mime_type && file.mime_type !== "application/octet-stream") throw new TextPreviewUnavailableError();
         const raw = await this.download(driveId, fileId, { maxBytes: options.maxBytes });
-        if (!isTextContentType(raw.contentType)) throw previewError;
+        if (!isTextContentType(raw.contentType)) throw new TextPreviewUnavailableError();
         return { ...raw, textSource: "raw" };
       }
     }

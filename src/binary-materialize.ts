@@ -28,7 +28,7 @@ export async function materializeBinaryReference(ref: BinaryExportReference, opt
   const target = join(directory, ref.file_name);
   let traceId: string | null = null;
   try {
-    const response = await (options.fetcher ?? fetch)(url, { redirect: "error", signal, headers: { "accept-encoding": "identity" } });
+    const response = await (options.fetcher ?? fetch)(url, { redirect: "error", signal, headers: { "accept-encoding": "identity", "user-agent": "kdrive-connector-download/0.3.1" } });
     traceId = response.headers.get("x-kdrive-trace-id");
     if (response.status !== 200) {
       const error = downloadResponseError(response);

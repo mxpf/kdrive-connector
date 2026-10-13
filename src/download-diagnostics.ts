@@ -1,4 +1,5 @@
 const messages = {
+  DOWNLOAD_ACCESS_DENIED: "The download endpoint or its edge denied this client (HTTP 403). This does not prove the link expired. Use an identified HTTP client or check the host bridge and edge policy; do not weaken signed-URL authentication.",
   REFERENCE_INVALID_OR_EXPIRED: "Binary reference expired or unavailable; call kdrive_export_file again and verify the returned version before retrying.",
   VERSION_CHANGED: "The pinned file version is unavailable; export again and compare resolved_version.",
   UPSTREAM_AUTHENTICATION_FAILED: "The connector's upstream authentication failed; check connector health.",
@@ -23,7 +24,7 @@ export class BinaryDownloadError extends Error {
 }
 
 export function downloadResponseError(response: Response): BinaryDownloadError {
-  const fallback = ({ 409: "VERSION_CHANGED", 410: "REFERENCE_INVALID_OR_EXPIRED", 429: "UPSTREAM_RATE_LIMITED", 502: "UPSTREAM_UNAVAILABLE", 504: "TRANSFER_TIMEOUT" } as Record<number, string>)[response.status] ?? "DOWNLOAD_FAILED";
+  const fallback = ({ 403: "DOWNLOAD_ACCESS_DENIED", 409: "VERSION_CHANGED", 410: "REFERENCE_INVALID_OR_EXPIRED", 429: "UPSTREAM_RATE_LIMITED", 502: "UPSTREAM_UNAVAILABLE", 504: "TRANSFER_TIMEOUT" } as Record<number, string>)[response.status] ?? "DOWNLOAD_FAILED";
   const code = response.headers.get("x-kdrive-error-code");
   return new BinaryDownloadError(code && Object.hasOwn(messages, code) ? code : fallback, response.headers.get("x-kdrive-trace-id"));
 }

@@ -46,6 +46,7 @@ for (const [name, mime, size, prefix] of fixtures) test(`reference endpoint → 
     assert.ok(JSON.stringify(ref).length < 4096);
     const file = await materializeBinaryReference(ref, { origin, directory, fetcher: async (url, init) => {
       assert.equal(init?.redirect, "error");
+      assert.equal(new Headers(init?.headers).get("user-agent"), "kdrive-connector-download/0.3.1");
       return serveBinaryExport(new Request(url, { signal: init?.signal }), new URL(String(url)).pathname.slice(8), {
         secret, subject: "owner", driveId: 42, client: { downloadVersionStream: async (_drive, id, version) => {
           assert.equal(id, 7); assert.equal(version, "pinned-etag");

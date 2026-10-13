@@ -25,3 +25,11 @@ export class KDriveApiError extends Error {
     this.details = details;
   }
 }
+
+export class TextPreviewUnavailableError extends Error {
+  readonly code = "TEXT_PREVIEW_UNAVAILABLE";
+  constructor() {
+    super("kDrive has no usable text preview for this file. The original binary may still be available: call kdrive_export_file, verify its complete bytes and SHA-256 with a supported host file bridge, then use a document reader. Password-protected PDFs require the correct password; scanned PDFs may require OCR. A signed URL is not a native file ID.");
+    this.name = "TextPreviewUnavailableError";
+  }
+}

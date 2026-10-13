@@ -17,7 +17,8 @@
     "start": "node --env-file=.env dist/server.js",
     "token:save": "npm run build --silent && node --env-file=.env dist/token-cli.js",
     "test": "node --import tsx --test test/*.test.ts",
-    "transfer": "node --env-file-if-exists=.env dist/transfer-cli.js"
+    "transfer": "node --env-file-if-exists=.env dist/transfer-cli.js",
+    "test:pdf": "node --import tsx --test test/integration/pdf-interop.test.ts"
   },
   "engines": {
     "node": ">=24"

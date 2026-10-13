@@ -39,6 +39,16 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Set up Python for synthetic PDF interoperability tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Test independent HTTP clients and PDF extraction
+        run: |
+          python3 -m pip install -r test/integration/requirements.txt
+          npm run test:pdf
+
       - name: Build
         run: npm run build
 
@@ -52,4 +62,8 @@ jobs:
 
       - name: Test remote server
         run: npm test
+        working-directory: remote
+
+      - name: Test Worker HTTP binary delivery
+        run: npm run test:http
         working-directory: remote

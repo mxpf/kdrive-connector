@@ -1,0 +1,2 @@
+# Preserve exact PDF fixture bytes, including xref offsets, on every platform.
+test/fixtures/pdf/*.pdf binary

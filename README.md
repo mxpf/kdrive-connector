@@ -304,6 +304,17 @@ For files larger than the inline read limit, use **`kdrive_export_file`**, not `
 
 See [binary transport implementation and acceptance plan](docs/binary-transport.md) for security boundaries, configuration, limits, and automated versus live acceptance coverage.
 
+**0.3.1 PDF interoperability (2026-10-13):** independent Node, curl, and Python
+downloads verified an existing synthetic PDF's complete bytes and SHA-256. New
+ordinary and encrypted PDF fixtures cover HTTP delivery and text extraction;
+Adobe extraction succeeded through this host's local-file adapter, including a
+synthetic copy unlocked with its known password. Source fixes provide an explicit
+`TEXT_PREVIEW_UNAVAILABLE` recovery action, identified download clients, clearer
+HTTP 403 diagnostics, and Worker streams with a preserved byte-length header.
+They are not deployed. ChatGPT runtimes without a native file-import bridge still
+have the Adobe storage-type limitation. See the [investigation and test evidence](docs/binary-interop-0.3.1.md)
+for the exact coverage and the remaining acceptance boundary.
+
 Repeated exports of an unchanged binary can reuse a verified digest for up to ten
 minutes, avoiding a redundant full-file hash download. The remote cache is isolated
 by authenticated owner and drive and survives MCP session changes and Worker

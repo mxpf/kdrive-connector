@@ -36,7 +36,7 @@ export async function serveBinaryExport(request: Request, token: string, config:
     validReference = true;
     trace = binaryTrace("binary_download", payload.traceId);
     headers.set("x-kdrive-trace-id", trace.traceId);
-    if (!["GET", "HEAD"].includes(request.method)) { trace.complete(false, "METHOD_NOT_ALLOWED"); return new Response(null, { status: 405, headers }); }
+    if (!["GET", "HEAD"].includes(request.method)) { headers.set("allow", "GET, HEAD"); trace.complete(false, "METHOD_NOT_ALLOWED"); return new Response(null, { status: 405, headers }); }
     headers.set("content-type", payload.mimeType);
     headers.set("content-disposition", `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(payload.fileName).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16)}`)}`);
     headers.set("content-length", String(payload.size));
@@ -89,7 +89,19 @@ export async function serveBinaryExport(request: Request, token: string, config:
       },
       async cancel() { trace.progress("download", size); trace.complete(false, "DOWNLOAD_CANCELLED"); cleanup(); controller.abort(); await reader.cancel().catch(() => undefined); },
     });
-    return new Response(body, { headers });
+    // workerd ignores a manually supplied Content-Length on an ordinary stream.
+    // Keep the integrity gate upstream of the platform's known-length stream.
+    const FixedLength = (globalThis as typeof globalThis & {
+      FixedLengthStream?: new (length: number) => TransformStream<Uint8Array, Uint8Array>;
+    }).FixedLengthStream;
+    // A known zero-length response can finish before the consumer reads it.
+    // Validate upstream EOF first, otherwise unexpected bytes evade the gate.
+    if (payload.size === 0) {
+      const empty = body.getReader();
+      try { await empty.read(); } finally { empty.releaseLock(); }
+      return new Response(new Uint8Array(), { headers });
+    }
+    return new Response(FixedLength ? body.pipeThrough(new FixedLength(payload.size)) : body, { headers });
   } catch (error) {
     const code = !validReference ? "REFERENCE_INVALID_OR_EXPIRED" : binaryErrorCode(error);
     // Upstream auth errors are not a challenge to reauthenticate this bearer link.
