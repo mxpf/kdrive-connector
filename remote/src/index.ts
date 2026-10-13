@@ -15,7 +15,7 @@ export { KDriveOperationNonceStore } from "./operation-nonce-store";
 export { KDriveBinaryDigestStore } from "./binary-digest-store";
 import { digestStoreName } from "./binary-digest-store";
 import { cloudflareOcrProvider } from "../../src/pdf-ocr.js";
-import { renderPdfPage } from "../../src/pdf-render.js";
+import { renderPdfOcrPage } from "../../src/pdf-render.js";
 import pdfiumWasm from "@hyzyla/pdfium/pdfium.wasm";
 
 function positiveInteger(value: string, name: string): number {
@@ -68,7 +68,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		registerKDriveTools(this.server, client, {
 			pdfOcrRuntime: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && this.env.AI ? {
 				provider: cloudflareOcrProvider(this.env.AI),
-				render: (bytes, page, password) => renderPdfPage(bytes, page, password, pdfiumWasm),
+				render: (bytes, page, password, options) => renderPdfOcrPage(bytes, page, password, options, pdfiumWasm),
 			} : undefined,
 			digestCache: { get: (identity) => digestStore.getDigest(identity), set: (identity, digest) => digestStore.putDigest(identity, digest) },
 			driveId,

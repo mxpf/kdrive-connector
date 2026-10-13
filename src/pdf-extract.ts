@@ -2,17 +2,21 @@
 // Timers cannot preempt synchronous PDF parsing; the runtime CPU/memory ceiling
 // remains the final backstop for malicious compressed PDFs.
 import { extractFormFields, type PdfFormField } from "./pdf-forms.js";
+import { validOcrImageOptions, type PdfOcrImageOptions } from "./pdf-ocr-image.js";
 export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, fieldsPerCall: 500, timeoutMs: 20_000 } as const;
 
 export class PdfReadError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = "PdfReadError"; }
 }
 
-export interface PdfReadOptions { startPage?: number; pageCount?: number; password?: string; ocr?: boolean }
+export interface PdfReadOptions extends PdfOcrImageOptions { startPage?: number; pageCount?: number; password?: string; ocr?: boolean }
 
 export function validatePdfOptions(options: PdfReadOptions) {
   const startPage = options.startPage ?? 1, pageCount = options.pageCount ?? (options.ocr ? 1 : PDF_LIMITS.pagesPerCall);
   if (options.ocr !== undefined && typeof options.ocr !== "boolean") throw new PdfReadError("PDF_OCR_OPTIONS", "ocr must be a boolean.");
+  if (!validOcrImageOptions(options) || (!options.ocr && (options.ocrRegion !== undefined || options.ocrRotation !== undefined))) {
+    throw new PdfReadError("PDF_OCR_OPTIONS", "OCR rotation/region require ocr=true. Rotation must be 0, 90, 180 or 270 clockwise; region must lie inside the displayed page using fractions from 0 to 1, with width and height at least 0.01.");
+  }
   if (options.ocr && pageCount !== 1) throw new PdfReadError("PDF_OCR_PAGE_LIMIT", "OCR supports one page per call. Set pageCount to 1.");
   if (!Number.isSafeInteger(startPage) || startPage < 1 || !Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > PDF_LIMITS.pagesPerCall) {
     throw new PdfReadError("PDF_PAGE_RANGE", "Choose a positive startPage and between 1 and 5 pages.");

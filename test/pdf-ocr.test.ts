@@ -9,7 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { KDriveClient } from '../src/kdrive-client.js';
-import { renderPdfPage } from '../src/pdf-render.js';
+import { renderPdfPage, renderPdfOcrPage } from '../src/pdf-render.js';
 import { cloudflareOcrProvider, PDF_OCR_MODEL, runPdfOcr, type PdfOcrRuntime } from '../src/pdf-ocr.js';
 import { connectorDiagnostics } from '../src/connector-diagnostics.js';
 
@@ -20,7 +20,7 @@ const client = (bytes = ordinary) => ({
   downloadVersionStream: async () => new Response(bytes),
 });
 const code = (expected: string) => (e: any) => { assert.equal(e.code, expected); return true; };
-const mockRuntime = (recognize = async () => 'MOCK TRANSCRIPTION'): PdfOcrRuntime => ({ render: renderPdfPage, provider: { recognize } });
+const mockRuntime = (recognize = async () => 'MOCK TRANSCRIPTION'): PdfOcrRuntime => ({ render: renderPdfOcrPage, provider: { recognize } });
 
 // Flatten a rendered synthetic fixture into an image-only PDF, in memory.
 function scannedPdf(png: Uint8Array) {
@@ -43,7 +43,7 @@ test('scanned PDF flows through complete download, hash, full-page rendering and
   const originalImage = await renderPdfPage(ordinary.slice(), 1);
   const scan = scannedPdf(originalImage.png);
   let calls = 0;
-  const runtime: PdfOcrRuntime = { render: renderPdfPage, provider: { recognize: async png => {
+  const runtime: PdfOcrRuntime = { render: renderPdfOcrPage, provider: { recognize: async png => {
     calls++;
     const rendered = decode(png);
     assert.ok(rendered.data.filter((value, index) => index % 4 !== 3 && value < 128).length > 1000, 'scan render must contain ink, not just a PNG header');
@@ -138,4 +138,32 @@ test('MCP accepts explicit OCR with an omitted pageCount and returns structured 
     assert.match(JSON.stringify(result.structuredContent?.ocr), /MOCK TRANSCRIPTION/);
     assert.match(JSON.stringify(result.structuredContent?.pages), /ORCHID-7319/);
   } finally { await host.close(); await server.close(); }
+});
+
+test('MCP preserves explicit region scope, rotation and whole-file integrity with one inference', async () => {
+  let calls=0, downloads=0;
+  const source=client();
+  const server = new McpServer({ name:'region-test',version:'1' });
+  registerPdfTools(server, {...source, downloadVersionStream:async()=>{downloads++;return source.downloadVersionStream();}} as unknown as KDriveClient,42,
+    mockRuntime(async()=>{calls++;return 'MOCK REGION';}));
+  const host=new Client({name:'test',version:'1'});
+  const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await host.connect(b);
+  try {
+    const region={x:0,y:0,width:.8,height:.4};
+    const result=await host.callTool({name:'kdrive_read_pdf',arguments:{path:'/fixture.pdf',ocr:true,ocrRegion:region,ocrRotation:270}});
+    assert.ok(!result.isError);
+    const body=result.structuredContent as any;
+    assert.equal(body.ocr.preparation.scope,'region');
+    assert.equal(body.ocr.preparation.rotation,270);
+    assert.deepEqual(body.ocr.preparation.region,region);
+    assert.equal(body.sha256,createHash('sha256').update(ordinary).digest('hex'));
+    assert.match(JSON.stringify(body.pages),/ORCHID-7319/);
+    assert.match(body.warnings.join(' '),/only the explicitly selected region/);
+    assert.equal(calls,1);assert.equal(downloads,1);
+    for(const input of [{ocr:false,ocrRotation:90},{ocr:true,ocrRegion:{x:.8,y:0,width:.4,height:1}}]) {
+      const bad=await host.callTool({name:'kdrive_read_pdf',arguments:{path:'/fixture.pdf',...input}});
+      assert.equal(bad.isError,true);
+    }
+    assert.equal(calls,1);assert.equal(downloads,1);
+  } finally {await host.close();await server.close();}
 });

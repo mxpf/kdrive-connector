@@ -1,10 +1,11 @@
 # Direct PDF extraction on Cloudflare Free
 
-Status (2026-10-13, capability revision `2026-10-13.5`): **source implemented;
+Status (2026-10-13, capability revision `2026-10-13.6`): **source implemented;
 not deployed**. `kdrive_read_pdf` returns text and stored AcroForm values directly
 to ChatGPT. Optional scanned-page OCR is implemented but **disabled by default**;
-the live model contract is verified, but rotation, small print and visual
-checkbox accuracy failed acceptance. No Adobe file import, export URL, manual download or re-upload is needed by this
+the live model contract is verified. Explicit rotation correction and margin
+removal now pass the synthetic scan cases, but visual checkbox accuracy still
+fails acceptance. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
 ## Architecture and Free-plan fit
@@ -13,8 +14,12 @@ The reader downloads a pinned kDrive version, checks the complete byte length
 and SHA-256, and only then processes the bytes. Text and forms use `unpdf` 1.8.1
 (PDF.js 6.1.200). OCR uses `@hyzyla/pdfium` 3.0.0 to render a complete page,
 including form appearances, and `fast-png` to encode it. The render includes
-page rotation, crop, image transforms and overlaid content; it does not merely
-send embedded image objects. Dependencies and WASM are bundled, with no CDN fetch.
+PDF display rotation, image transforms and overlaid content; it does not merely
+send embedded image objects. After rendering, OCR removes only fully opaque,
+pure-white outer margins, preserving every nonwhite pixel and 24 pixels of
+padding where available. It performs no thresholding, smoothing or invented
+upscaling. An explicit region is cropped before any additional clockwise
+rotation. Original text/form extraction is unaffected. Dependencies and WASM are bundled, with no CDN fetch.
 The browser export of PDFium is required in Workers; Node uses its Node export.
 
 Parsing and rendering run inside the existing SQLite `KDriveMCP` Durable Object,
@@ -46,6 +51,8 @@ uses existing text/structure, which does not establish scanned-page OCR.
 | `startPage` | One-based page, default 1 |
 | `pageCount` | 1–5, default 5 for text/forms; exactly 1, default 1, with OCR |
 | `ocr` | Default false. Explicit true requires configured OCR and sends one rendered page to Workers AI |
+| `ocrRotation` | Optional clockwise correction: 0, 90, 180 or 270, after PDF display rotation; orientation is never guessed |
+| `ocrRegion` | Optional `{x,y,width,height}` fractions of the displayed page, top-left origin, before correction; width/height at least 0.01, rectangle entirely inside page |
 | `expectedSha256` | Carry the first result's digest on later batches to reject changed file versions |
 | `password` | Only a user-authorized password; never guessed, echoed or retained by the connector |
 
@@ -56,6 +63,11 @@ characters including serialized form data. OCR renders at up to 2× PDF scale,
 unreadable at these limits. Unknown/missing or truncated completion reasons fail
 closed; only the observed `stop` marker is accepted. A normal generation stop
 does not establish accurate or complete transcription.
+
+Image preparation retains the same two-million-pixel ceiling. There is still
+one model call per requested page/region, with no automatic orientation search,
+tilings or retries. A later region call re-downloads the source; carry
+`expectedSha256` to ensure it is the same version. OCR options require `ocr=true`.
 
 The full operation has a 20-second deadline. AI inference receives an abort
 signal and a bounded wait; cancellation cannot guarantee upstream computation
@@ -68,7 +80,10 @@ Results retain separate sources:
 - `pages[].formFields`: stored AcroForm values, field names/types, button export
   values and checked states, plus consistency issues.
 - `ocr`: optional page-numbered visual transcription, model, image dimensions
-  and `review_required`/`no_text_detected` status. It never overwrites form values
+  and `review_required`/`no_text_detected` status. `preparation` records full-page
+  versus region scope, requested region, source dimensions, pixel crop and
+  clockwise correction. A region result never claims full-page coverage. It
+  never overwrites form values
   or original text, and no numeric confidence is invented.
 - Complete-file byte length/SHA-256, page continuation, form scope and warnings.
 
@@ -135,8 +150,8 @@ truncated/unknown and oversized responses, provider failures, timeout and no ret
 These establish plumbing and error behavior, **not live recognition accuracy**.
 No private tax files were accessed or used as fixtures.
 
-Validation passed: 188 root tests, 25 Worker tests, three local workerd HTTP
-tests and two independent-client/Python integration tests (218 total), both
+Validation passed: 195 root tests, 25 Worker tests, three local workerd HTTP
+tests and two independent-client/Python integration tests (225 total), both
 TypeScript checks and the Node build. The earlier local dry build produced
 11,261.08 KiB uncompressed (3,652.14 KiB gzip), below the documented Free bundle
 limit. Local tests are not production CPU, startup or memory measurements.
@@ -147,7 +162,7 @@ requires `pypdf`; `KDRIVE_TEST_PYTHON` can select the bundled workspace Python.
 Install both root and remote dependencies. CI runs on macOS and Ubuntu and does
 not deploy. No Worker upload or deployment was performed.
 
-### Live synthetic acceptance: 2026-10-13
+### Initial live synthetic acceptance: 2026-10-13
 
 After explicit authorization and sign-in, the Cloudflare dashboard confirmed
 Workers Free as the current plan, including 10,000 AI neurons/day. Nine synthetic
@@ -182,16 +197,38 @@ a scalar in the field tree and a singleton array on its widget. The reader
 normalizes those representations for comparison while preserving the returned
 selection array and continuing to flag conflicting values.
 
+### Orientation and small-text follow-up: 2026-10-13
+
+Lossless pixel preparation fixes the tested scan failures without changing the
+model, adding paid services or increasing inference count. The final ten-case
+live run matched nine cases: the original scans (including rotation, small
+print, mixed content, multilingual and encrypted data), two new image-rotated
+scans with independent values, and a small-text region on an off-white page.
+Rotations were supplied explicitly, not automatically detected. Every expected
+amount, date, negative sign and bracketed mark matched in these cases.
+
+The filled form's text and all five stored field values still match, but its
+visual checkbox states are omitted. Separate prompt and focused-region trials
+either omitted or misclassified the empty checkbox; these were not promoted as
+fixes. The original transcription prompt is retained. Structured AcroForm values
+continue to carry the correct selected states and never become OCR guesses.
+
+The final run used 286.82 neurons; the entire follow-up, including unsuccessful
+diagnostics, used 653.79 neurons over 23 calls. See
+[the follow-up evidence](evidence/ocr-preprocessing-2026-10-13.md), with original
+responses and a replay regression. Normal generation termination is not an
+accuracy guarantee. The live runner correctly exits nonzero for the remaining
+form failure, while the local regression suite passes by detecting that failure.
+
 ### Remaining release gates
 
-OCR stays disabled. Investigate explicit orientation correction and bounded
-region rendering for small text, then repeat synthetic accuracy checks with
-independent examples; the current model is not reliable enough for unreviewed
-tax amounts or visual checkbox interpretation. Stored AcroForm values remain
-separate and do not become OCR-derived guesses.
+OCR stays disabled. General visual checkbox recognition is still unreliable,
+and the ten simple synthetic cases do not establish dense-page or arbitrary-scan
+accuracy. Explicit region selection needs known layout; orientation correction
+needs known orientation. Automatic orientation/region detection is not implemented.
 
-After accuracy passes, production Free CPU/memory/startup, the real AI binding,
-quota handling and the actual ChatGPT-to-kDrive tool flow still need validation.
-Direct REST tests use a fixture-backed kDrive client and do not establish those
-production behaviors. Deployment requires separate authorization; account plan,
-remote configuration and the checked-in disabled flag remain unchanged.
+Production Free CPU/memory/startup, the real AI binding, quota handling and the
+actual ChatGPT-to-kDrive tool flow still need validation. Direct REST tests use a
+fixture-backed kDrive client and do not establish those production behaviors.
+Deployment requires separate authorization; account plan, remote configuration
+and the checked-in disabled flag remain unchanged.

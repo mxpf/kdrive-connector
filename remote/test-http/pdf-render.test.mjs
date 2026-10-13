@@ -9,7 +9,7 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
   const fixtures = await Promise.all(['ordinary', 'password-protected'].map(async name => Array.from(await readFile(new URL(`../../test/fixtures/pdf/${name}.pdf`, import.meta.url)))));
   const bundle = await build({ stdin: { contents: `
     import { DurableObject } from 'cloudflare:workers';
-    import { renderPdfPage } from './src/pdf-render.ts';
+    import { renderPdfPage, renderPdfOcrPage } from './src/pdf-render.ts';
     import { readKDrivePdf } from './src/pdf-tools.ts';
     import { cloudflareOcrProvider } from './src/pdf-ocr.ts';
     import wasm from './pdfium.wasm';
@@ -22,8 +22,8 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
             resolveBinaryVersion: async () => ({ file: { id: 7, name: 'fixture.pdf', size: bytes.length }, versionId: 'v1' }),
             downloadVersionStream: async () => new Response(bytes),
           };
-          const result = await readKDrivePdf(client, 42, { path: '/fixture.pdf', ocr: true, password: input.encrypted ? 'synthetic-open-password' : undefined }, {
-            render: (bytes, page, password) => renderPdfPage(bytes, page, password, wasm),
+          const result = await readKDrivePdf(client, 42, { path: '/fixture.pdf', ocr: true, ocrRotation: 270, ocrRegion: {x:0,y:0,width:1,height:.5}, password: input.encrypted ? 'synthetic-open-password' : undefined }, {
+            render: (bytes, page, password, options) => renderPdfOcrPage(bytes, page, password, options, wasm),
             provider: cloudflareOcrProvider({ run: async (model, payload) => {
               if (!payload.image.startsWith('data:image/png;base64,iVBOR')) throw new Error('Invalid PNG input');
               return { result: { answer: 'MOCK OCR RESPONSE', finish_reason: 'stop' }, usage: { neurons: 30 } };
@@ -60,6 +60,9 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
       assert.match(result.pages[0].text, /ORCHID-7319/);
       assert.equal(result.ocr.text, 'MOCK OCR RESPONSE');
       assert.equal(result.ocr.status, 'review_required');
+      assert.equal(result.ocr.preparation.rotation,270);
+      assert.equal(result.ocr.preparation.scope,'region');
+      assert.ok(result.ocr.imageWidth*result.ocr.imageHeight<=2000000);
       assert.equal(result.byteLength, fixtures[encrypted ? 1 : 0].length);
     }
     assert.equal(outbound, 0);

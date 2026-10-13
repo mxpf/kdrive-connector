@@ -8,8 +8,8 @@ import { resolve, basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readKDrivePdf } from '../src/pdf-tools.js';
-import { renderPdfPage } from '../src/pdf-render.js';
-import { cloudflareOcrProvider } from '../src/pdf-ocr.js';
+import { renderPdfOcrPage } from '../src/pdf-render.js';
+import { cloudflareOcrProvider, PDF_OCR_PROMPT } from '../src/pdf-ocr.js';
 import { missingOcrText } from './lib/ocr-acceptance.js';
 
 const args = process.argv.slice(2);
@@ -22,10 +22,13 @@ if (live && (!args.includes('--free-plan-verified') || !args.includes('--account
   throw new Error('Live tests require a verified Workers Free account: --free-plan-verified --account ID. No account upgrade is performed.');
 }
 const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
-const allowed = ['scan','rotated','mixed','small-print','multilingual','forms','encrypted-scan'];
+const allowed = ['scan','rotated','mixed','small-print','multilingual','forms','encrypted-scan','sideways-heldout','upside-down-heldout','region-heldout'];
 if (!manifest.syntheticOnly || !Array.isArray(manifest.cases) || manifest.cases.length !== allowed.length
   || manifest.cases.some((x: any) => !allowed.includes(x.name) || x.file !== `${x.name}.pdf` || basename(x.file) !== x.file)
   || new Set(manifest.cases.map((x:any)=>x.name)).size !== allowed.length) throw new Error('Invalid synthetic fixture manifest.');
+const onlyCase = args.includes('--case') ? value('--case') : undefined;
+if (onlyCase !== undefined && !allowed.includes(onlyCase)) throw new Error('Unknown synthetic case.');
+const selectedCases = manifest.cases.filter((x:any) => !onlyCase || x.name === onlyCase);
 let token: string | undefined;
 if (live) {
   try {
@@ -36,12 +39,12 @@ if (live) {
     token = credentials.token;
   } catch { throw new Error('Cloudflare credentials unavailable. Sign in with Wrangler; no credential details are printed.'); }
 }
-const report: any = { date: new Date().toISOString(), live, syntheticOnly:true, calls:0, cases:[], deploymentPerformed:false };
-const reportPath = join(directory, live ? 'live-report.json' : 'local-report.json');
-for (const fixture of manifest.cases) {
+const report: any = { date: new Date().toISOString(), live, modelPrompt:PDF_OCR_PROMPT, syntheticOnly:true, scope:onlyCase ?? 'complete_suite', calls:0, cases:[], deploymentPerformed:false };
+const reportPath = join(directory, `${live ? 'live' : 'local'}-${onlyCase ?? 'report'}.json`);
+for (const fixture of selectedCases) {
   const bytes = new Uint8Array(await readFile(join(directory,fixture.file)));
   const start = performance.now();
-  const row: any = { name:fixture.name, byteLength:bytes.length };
+  const row: any = { name:fixture.name, byteLength:bytes.length, ocrOptions:fixture.ocrOptions ?? {} };
   report.cases.push(row);
   let wire: any;
   try {
@@ -65,17 +68,17 @@ for (const fixture of manifest.cases) {
       resolveBinaryVersion:async()=>({file:{id:7,name:fixture.file,type:'file',size:bytes.length},versionId:'synthetic-v1'}),
       downloadVersionStream:async()=>new Response(bytes),
     };
-    const result = await readKDrivePdf(client,42,{path:`/Synthetic OCR Acceptance/${fixture.file}`,password:fixture.password,ocr:live},provider ? {
-      provider,render:async(data,page,password)=>{
-        const image=await renderPdfPage(data,page,password);
+    const result = await readKDrivePdf(client,42,{path:`/Synthetic OCR Acceptance/${fixture.file}`,password:fixture.password,ocr:live,...(live ? fixture.ocrOptions : {})},provider ? {
+      provider,render:async(data,page,password,options)=>{
+        const image=await renderPdfOcrPage(data,page,password,options);
         await writeFile(join(directory,`${fixture.name}-connector.png`),image.png);
         return image;
       },
     }:undefined);
     if (!live) {
-      const image=await renderPdfPage(bytes,1,fixture.password);
+      const image=await renderPdfOcrPage(bytes,1,fixture.password,fixture.ocrOptions);
       await writeFile(join(directory,`${fixture.name}-connector.png`),image.png);
-      row.image={width:image.width,height:image.height,bytes:image.png.length};
+      row.image={width:image.width,height:image.height,bytes:image.png.length,preparation:image.preparation};
     }
     row.sha256=result.sha256; row.textLayer=result.pages[0].text; row.formFields=result.pages[0].formFields;
     row.ocr=result.ocr;
@@ -94,9 +97,9 @@ for (const fixture of manifest.cases) {
   if(wire) row.provider=wire;
   await writeFile(reportPath,JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify({name:row.name,status:row.status,wallMs:row.wallMs,errorCode:row.errorCode,missingText:row.missingText,formMismatches:row.formMismatches}));
-  // A provider contract/access failure is not permission to retry seven times.
+  // A provider contract/access failure stops the remaining cases.
   if(live && row.status==='failed') break;
 }
 console.log(JSON.stringify({report:reportPath,calls:report.calls}));
 // Accuracy failures are release-gate failures, even when inference returned HTTP 200.
-if(report.cases.length !== allowed.length || report.cases.some((c:any)=>c.status==='failed'||c.status==='review_required'||c.formMismatches?.length)) process.exitCode=1;
+if(report.cases.length !== selectedCases.length || report.cases.some((c:any)=>c.status==='failed'||c.status==='review_required'||c.formMismatches?.length)) process.exitCode=1;

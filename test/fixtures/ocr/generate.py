@@ -43,6 +43,7 @@ base = ['SYNTHETIC OCR TEST - NOT A REAL TAX RECORD', 'Fixture: CEDAR-4826', 'Ta
         'Payment date: 2025-12-31', '[X] Resident   [ ] Nonresident']
 make('scan',base)
 make('rotated',base,rotate=True)
+manifest[-1]['ocrOptions'] = {'ocrRotation': 270}
 make('mixed',base,mixed=True)
 make('small-print',base+['Small print: 0.01  1,001.10  10,010.01  -42.50'],small=True)
 make('multilingual',['SYNTHETIC OCR TEST - FICTIONAL VALUES','Name: Anna Müller','Reçu: déjà payé','Betrag: 1.234,56 EUR','Référence: ÉTÉ-2025'])
@@ -67,5 +68,28 @@ writer=PdfWriter();writer.clone_document_from_reader(PdfReader(out/'scan.pdf'))
 writer.encrypt('synthetic-open-password', owner_password='synthetic-owner-password', algorithm='AES-256')
 writer.write(out/'encrypted-scan.pdf')
 manifest.append({'name':'encrypted-scan','file':'encrypted-scan.pdf','expected':base,'kind':'scan','password':'synthetic-open-password'})
+# Independent text/marks and image rotation with no PDF /Rotate entry.
+heldout = ['SYNTHETIC INVOICE - FICTIONAL', 'Invoice: MAPLE-9361',
+           'Date: 2026-04-09', 'Subtotal: 8,008.80', 'Adjustment: -0.05',
+           '[ ] Approved   [X] Pending']
+for name, angle, correction in [('sideways-heldout',90,90), ('upside-down-heldout',180,180)]:
+    image = raster(heldout).rotate(angle,expand=True)
+    c = canvas.Canvas(str(out/f'{name}.pdf'),pagesize=(image.width/2,image.height/2),invariant=True)
+    c.drawImage(ImageReader(image),0,0,width=image.width/2,height=image.height/2)
+    c.showPage();c.save()
+    manifest.append({'name':name,'file':f'{name}.pdf','expected':heldout,'kind':'scan','ocrOptions':{'ocrRotation':correction}})
+# Off-white background prevents automatic whitespace trimming. Select only a
+# known bottom-right region; outside content must not be claimed as transcribed.
+image = Image.new('RGB',(1224,1584),(247,247,240))
+draw = ImageDraw.Draw(image)
+draw.text((80,80),'SYNTHETIC PAGE - OUTSIDE REQUESTED REGION',font=ImageFont.truetype(str(font_path),24),fill='black')
+region_lines = ['SYNTHETIC REGION', 'Invoice: BIRCH-2750', 'Credit: 7,070.07',
+                'Fee: -0.09', '[X] Verified   [ ] Pending']
+for i,line in enumerate(region_lines):
+    draw.text((630,920+i*24),line,font=ImageFont.truetype(str(font_path),16),fill='black')
+c=canvas.Canvas(str(out/'region-heldout.pdf'),pagesize=(612,792),invariant=True)
+c.drawImage(ImageReader(image),0,0,width=612,height=792);c.showPage();c.save()
+manifest.append({'name':'region-heldout','file':'region-heldout.pdf','expected':region_lines,'kind':'region',
+                 'ocrOptions':{'ocrRegion':{'x':0.5,'y':0.57,'width':0.4,'height':0.11}}})
 (out/'manifest.json').write_text(json.dumps({'syntheticOnly':True,'cases':manifest},ensure_ascii=False,indent=2)+'\n')
 print(json.dumps({'output':str(out),'cases':len(manifest)}))
