@@ -1,0 +1,1470 @@
+{
+  "date": "2026-10-13T22:05:31.849Z",
+  "syntheticOnly": true,
+  "liveBinding": false,
+  "deploymentPerformed": false,
+  "productionLimitsVerified": false,
+  "cases": [
+    {
+      "name": "scan",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 722,
+      "result": {
+        "path": "/Synthetic/scan.pdf",
+        "fileName": "scan.pdf",
+        "byteLength": 38458,
+        "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 715.812,
+      "heapAfter": {
+        "usedSize": 9074620,
+        "totalSize": 13336576,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 18470867
+      }
+    },
+    {
+      "name": "rotated",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 335,
+      "result": {
+        "path": "/Synthetic/rotated.pdf",
+        "fileName": "rotated.pdf",
+        "byteLength": 38382,
+        "sha256": "1cd0cbc37e1bc4bd71453ad9a4e59fdc32585ef01f0acecbcd5d97d410b10131",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1584,
+            "sourceHeight": 1224,
+            "region": null,
+            "rotation": 270,
+            "crop": {
+              "x": 976,
+              "y": 83,
+              "width": 476,
+              "height": 689
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 331.963,
+      "heapAfter": {
+        "usedSize": 9528472,
+        "totalSize": 14647296,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 3682059
+      }
+    },
+    {
+      "name": "mixed",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 391,
+      "result": {
+        "path": "/Synthetic/mixed.pdf",
+        "fileName": "mixed.pdf",
+        "byteLength": 38525,
+        "sha256": "623432857e3556923093ac332e80bd88dcc989d17f35c639ccd32e1ca9883e4c",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "MIXED TEXT LAYER: CEDAR-4826",
+            "status": "text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 592,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 16,
+              "width": 689,
+              "height": 592
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 389.526,
+      "heapAfter": {
+        "usedSize": 10909852,
+        "totalSize": 14909440,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 21562538
+      }
+    },
+    {
+      "name": "small-print",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 257,
+      "result": {
+        "path": "/Synthetic/small-print.pdf",
+        "fileName": "small-print.pdf",
+        "byteLength": 22428,
+        "sha256": "16b64b1c616889873d3b36ad74872d0f9c466f8ba3b3bda264dc4816cc913077",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 399,
+          "imageHeight": 245,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 129,
+              "width": 399,
+              "height": 245
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 250.534,
+      "heapAfter": {
+        "usedSize": 9248948,
+        "totalSize": 14909440,
+        "embedderHeapUsedSize": 236128,
+        "backingStorageSize": 13464997
+      }
+    },
+    {
+      "name": "multilingual",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 1214,
+      "result": {
+        "path": "/Synthetic/multilingual.pdf",
+        "fileName": "multilingual.pdf",
+        "byteLength": 22845,
+        "sha256": "10f8e3da8104ae8469ec51148c6943a7ca6c11563e390ecad633f88441ae5ffa",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 600,
+          "imageHeight": 299,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 85,
+              "y": 132,
+              "width": 600,
+              "height": 299
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 1212.749,
+      "heapAfter": {
+        "usedSize": 10347384,
+        "totalSize": 14909440,
+        "embedderHeapUsedSize": 236128,
+        "backingStorageSize": 27251563
+      }
+    },
+    {
+      "name": "forms",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 226,
+      "result": {
+        "path": "/Synthetic/forms.pdf",
+        "fileName": "forms.pdf",
+        "byteLength": 9034,
+        "sha256": "1354b161bc1808407c05ae23ebdae700e61cacd4ba6ab9da75ec5301d60bb939",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 219.44,
+      "heapAfter": {
+        "usedSize": 10264536,
+        "totalSize": 14909440,
+        "embedderHeapUsedSize": 227248,
+        "backingStorageSize": 19117422
+      }
+    },
+    {
+      "name": "forms-reversed",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 156,
+      "result": {
+        "path": "/Synthetic/forms-reversed.pdf",
+        "fileName": "forms-reversed.pdf",
+        "byteLength": 9034,
+        "sha256": "1611908171fb687e4dc94ece0885ede16f63128133c686e3e2c99f3325668cb7",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 147.924,
+      "heapAfter": {
+        "usedSize": 12041400,
+        "totalSize": 16220160,
+        "embedderHeapUsedSize": 227248,
+        "backingStorageSize": 36709387
+      }
+    },
+    {
+      "name": "forms-empty",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 182,
+      "result": {
+        "path": "/Synthetic/forms-empty.pdf",
+        "fileName": "forms-empty.pdf",
+        "byteLength": 9034,
+        "sha256": "a882d725f9dd7364840c332f1f3b058d8483a44646782939f75ceb9152534b21",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 170.365,
+      "heapAfter": {
+        "usedSize": 10565880,
+        "totalSize": 17268736,
+        "embedderHeapUsedSize": 227248,
+        "backingStorageSize": 1617168
+      }
+    },
+    {
+      "name": "forms-both",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 263,
+      "result": {
+        "path": "/Synthetic/forms-both.pdf",
+        "fileName": "forms-both.pdf",
+        "byteLength": 9034,
+        "sha256": "b02f97c44bb68f6810af3f929f0a9ba0d0bb79f4f66899c2f0f1b1ef4ada4a01",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 254.062,
+      "heapAfter": {
+        "usedSize": 12425428,
+        "totalSize": 17678336,
+        "embedderHeapUsedSize": 227248,
+        "backingStorageSize": 19209217
+      }
+    },
+    {
+      "name": "forms-flattened",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 415,
+      "result": {
+        "path": "/Synthetic/forms-flattened.pdf",
+        "fileName": "forms-flattened.pdf",
+        "byteLength": 32502,
+        "sha256": "3ebbb11022e692acd12917f732d476bd34d37248552c1006dc819ad2689c9cf1",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 404.58,
+      "heapAfter": {
+        "usedSize": 10316212,
+        "totalSize": 17678336,
+        "embedderHeapUsedSize": 199528,
+        "backingStorageSize": 19296261
+      }
+    },
+    {
+      "name": "forms-stale",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 232,
+      "result": {
+        "path": "/Synthetic/forms-stale.pdf",
+        "fileName": "forms-stale.pdf",
+        "byteLength": 9053,
+        "sha256": "04dd565fac83c3431267c4e111c68380ea9e9c05ad63051635ce9fbee9005c94",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 228.311,
+      "heapAfter": {
+        "usedSize": 12048148,
+        "totalSize": 17678336,
+        "embedderHeapUsedSize": 199528,
+        "backingStorageSize": 36889042
+      }
+    },
+    {
+      "name": "encrypted-scan",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 2902,
+      "result": {
+        "path": "/Synthetic/encrypted-scan.pdf",
+        "fileName": "encrypted-scan.pdf",
+        "byteLength": 39607,
+        "sha256": "21b4f93a4d038b9aba86c89a0ea8a85650068be57367a8386f40071e033c747e",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 2877.803,
+      "heapAfter": {
+        "usedSize": 13383592,
+        "totalSize": 20824064,
+        "embedderHeapUsedSize": 199528,
+        "backingStorageSize": 19101527
+      }
+    },
+    {
+      "name": "sideways-heldout",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 461,
+      "result": {
+        "path": "/Synthetic/sideways-heldout.pdf",
+        "fileName": "sideways-heldout.pdf",
+        "byteLength": 35700,
+        "sha256": "ef8fc88983460a0eb8fddcb0368c69a62d6f27111042789663c9a3d876c15983",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 471,
+          "imageHeight": 362,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1584,
+            "sourceHeight": 1224,
+            "region": null,
+            "rotation": 90,
+            "crop": {
+              "x": 132,
+              "y": 669,
+              "width": 362,
+              "height": 471
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 445.955,
+      "heapAfter": {
+        "usedSize": 14363768,
+        "totalSize": 20824064,
+        "embedderHeapUsedSize": 199528,
+        "backingStorageSize": 32891767
+      }
+    },
+    {
+      "name": "upside-down-heldout",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 640,
+      "result": {
+        "path": "/Synthetic/upside-down-heldout.pdf",
+        "fileName": "upside-down-heldout.pdf",
+        "byteLength": 26126,
+        "sha256": "da1c5d2c4ff26b1dec5f03cae5ee9fb818ebc1ec099066a0d7472919d5e5e727",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 471,
+          "imageHeight": 362,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 180,
+            "crop": {
+              "x": 669,
+              "y": 1090,
+              "width": 471,
+              "height": 362
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 622.586,
+      "heapAfter": {
+        "usedSize": 10102204,
+        "totalSize": 20824064,
+        "embedderHeapUsedSize": 42152,
+        "backingStorageSize": 15320281
+      }
+    },
+    {
+      "name": "region-heldout",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 182,
+      "result": {
+        "path": "/Synthetic/region-heldout.pdf",
+        "fileName": "region-heldout.pdf",
+        "byteLength": 17697,
+        "sha256": "a9b320e79d97c3ea1f21e43fe8af1db10c76f9746e2a5faa5568e82191ad240e",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR covers only the explicitly selected region, not the complete page. Text and stored form values still cover the selected page.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 490,
+          "imageHeight": 176,
+          "preparation": {
+            "scope": "region",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": {
+              "x": 0.5,
+              "y": 0.57,
+              "width": 0.4,
+              "height": 0.11
+            },
+            "rotation": 0,
+            "crop": {
+              "x": 612,
+              "y": 902,
+              "width": 490,
+              "height": 176
+            },
+            "whiteMarginsTrimmed": false
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      },
+      "localSampledActiveMs": 180.457,
+      "heapAfter": {
+        "usedSize": 11251180,
+        "totalSize": 20824064,
+        "embedderHeapUsedSize": 170672,
+        "backingStorageSize": 27217947
+      }
+    }
+  ],
+  "faultChecks": [
+    {
+      "name": "scan",
+      "mode": "quota",
+      "httpStatus": 422,
+      "wallMs": 139,
+      "errorCode": "PDF_OCR_FAILED",
+      "message": "OCR was unavailable or failed. Free quota or rate limits may apply. No retry or paid fallback was attempted; text and form values can be read with ocr=false.",
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      }
+    },
+    {
+      "name": "scan",
+      "mode": "offline",
+      "httpStatus": 422,
+      "wallMs": 7,
+      "errorCode": "PDF_BUSY",
+      "message": "Another PDF is being read. Retry after it completes.",
+      "telemetry": {
+        "calls": 0,
+        "aborted": false
+      }
+    },
+    {
+      "name": "scan",
+      "mode": "hang",
+      "httpStatus": 422,
+      "wallMs": 45036,
+      "errorCode": "PDF_TIMEOUT",
+      "message": "PDF retrieval or extraction exceeded its deadline.",
+      "telemetry": {
+        "calls": 1,
+        "aborted": true
+      }
+    },
+    {
+      "name": "scan",
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 953,
+      "result": {
+        "path": "/Synthetic/scan.pdf",
+        "fileName": "scan.pdf",
+        "byteLength": 38458,
+        "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "MOCK TRANSCRIPTION",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      }
+    }
+  ],
+  "localReadyWallMs": 446,
+  "localColdRequestWallMs": 42,
+  "heapBefore": {
+    "usedSize": 4831912,
+    "totalSize": 5996544,
+    "embedderHeapUsedSize": 515872,
+    "backingStorageSize": 820336
+  },
+  "heapAfter": {
+    "usedSize": 12167836,
+    "totalSize": 14794752,
+    "embedderHeapUsedSize": 170672,
+    "backingStorageSize": 19656738
+  },
+  "unexpectedOutboundRequests": 0,
+  "status": "passed"
+}

@@ -1,0 +1,157 @@
+{
+  "date": "2026-10-13T22:10:37.759Z",
+  "status": "passed",
+  "syntheticOnly": true,
+  "fixtureSource": "generated_in_process",
+  "deploymentPerformed": false,
+  "liveBinding": false,
+  "unexpectedOutboundRequests": 0,
+  "cases": [
+    {
+      "name": "scan",
+      "httpStatus": 200,
+      "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+      "wallMs": 1349,
+      "calls": 1
+    },
+    {
+      "name": "rotated",
+      "httpStatus": 200,
+      "sha256": "1cd0cbc37e1bc4bd71453ad9a4e59fdc32585ef01f0acecbcd5d97d410b10131",
+      "wallMs": 395,
+      "calls": 1
+    },
+    {
+      "name": "mixed",
+      "httpStatus": 200,
+      "sha256": "623432857e3556923093ac332e80bd88dcc989d17f35c639ccd32e1ca9883e4c",
+      "wallMs": 358,
+      "calls": 1
+    },
+    {
+      "name": "small-print",
+      "httpStatus": 200,
+      "sha256": "16b64b1c616889873d3b36ad74872d0f9c466f8ba3b3bda264dc4816cc913077",
+      "wallMs": 241,
+      "calls": 1
+    },
+    {
+      "name": "multilingual",
+      "httpStatus": 200,
+      "sha256": "10f8e3da8104ae8469ec51148c6943a7ca6c11563e390ecad633f88441ae5ffa",
+      "wallMs": 171,
+      "calls": 1
+    },
+    {
+      "name": "forms",
+      "httpStatus": 200,
+      "sha256": "1354b161bc1808407c05ae23ebdae700e61cacd4ba6ab9da75ec5301d60bb939",
+      "wallMs": 216,
+      "calls": 1
+    },
+    {
+      "name": "forms-reversed",
+      "httpStatus": 200,
+      "sha256": "1611908171fb687e4dc94ece0885ede16f63128133c686e3e2c99f3325668cb7",
+      "wallMs": 191,
+      "calls": 1
+    },
+    {
+      "name": "forms-empty",
+      "httpStatus": 200,
+      "sha256": "a882d725f9dd7364840c332f1f3b058d8483a44646782939f75ceb9152534b21",
+      "wallMs": 169,
+      "calls": 1
+    },
+    {
+      "name": "forms-both",
+      "httpStatus": 200,
+      "sha256": "b02f97c44bb68f6810af3f929f0a9ba0d0bb79f4f66899c2f0f1b1ef4ada4a01",
+      "wallMs": 224,
+      "calls": 1
+    },
+    {
+      "name": "forms-flattened",
+      "httpStatus": 200,
+      "sha256": "31569dbf8543913876811c4470f4ff36b55817a0e19e4ec98619733405e4cb2a",
+      "wallMs": 250,
+      "calls": 1
+    },
+    {
+      "name": "forms-stale",
+      "httpStatus": 200,
+      "sha256": "04dd565fac83c3431267c4e111c68380ea9e9c05ad63051635ce9fbee9005c94",
+      "wallMs": 117,
+      "calls": 1
+    },
+    {
+      "name": "encrypted-scan",
+      "httpStatus": 200,
+      "sha256": "141f75cc53df8203fe5592630c45c56eb4ed5b86fc41fb8f10a86597023ec5e6",
+      "wallMs": 551,
+      "calls": 1
+    },
+    {
+      "name": "sideways-heldout",
+      "httpStatus": 200,
+      "sha256": "ef8fc88983460a0eb8fddcb0368c69a62d6f27111042789663c9a3d876c15983",
+      "wallMs": 270,
+      "calls": 1
+    },
+    {
+      "name": "upside-down-heldout",
+      "httpStatus": 200,
+      "sha256": "da1c5d2c4ff26b1dec5f03cae5ee9fb818ebc1ec099066a0d7472919d5e5e727",
+      "wallMs": 230,
+      "calls": 1
+    },
+    {
+      "name": "region-heldout",
+      "httpStatus": 200,
+      "sha256": "a9b320e79d97c3ea1f21e43fe8af1db10c76f9746e2a5faa5568e82191ad240e",
+      "wallMs": 183,
+      "calls": 1
+    }
+  ],
+  "faultChecks": [
+    {
+      "mode": "quota",
+      "httpStatus": 422,
+      "errorCode": "PDF_OCR_FAILED",
+      "wallMs": 304,
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      }
+    },
+    {
+      "mode": "offline",
+      "httpStatus": 422,
+      "errorCode": "PDF_BUSY",
+      "wallMs": 9,
+      "telemetry": {
+        "calls": 0,
+        "aborted": false
+      }
+    },
+    {
+      "mode": "hang",
+      "httpStatus": 422,
+      "errorCode": "PDF_TIMEOUT",
+      "wallMs": 45112,
+      "telemetry": {
+        "calls": 1,
+        "aborted": true
+      }
+    },
+    {
+      "mode": "offline",
+      "httpStatus": 200,
+      "wallMs": 738,
+      "telemetry": {
+        "calls": 1,
+        "aborted": false
+      }
+    }
+  ]
+}

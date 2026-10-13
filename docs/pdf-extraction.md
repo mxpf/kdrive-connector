@@ -258,13 +258,21 @@ on a flattened PDF that has no stored fields.
 
 ### Remaining release gates
 
+The [binding/runtime validation](evidence/ocr-binding-runtime-2026-10-13.md)
+now passes through the real `env.AI.run` development binding: four synthetic
+reads plus a deliberate cancellation and successful recovery. All 15 PDFs also
+passed the local rendering pipeline; the 45-second deadline, busy guard and
+simulated quota errors were verified. No production implementation change was
+needed. Full-bundle startup and resource diagnostics are local measurements.
+
 OCR stays disabled pending separately authorized deployment and production
 validation. Passing synthetic cases does not establish dense-page or arbitrary-scan
 accuracy. Explicit region selection needs known layout; orientation correction
 needs known orientation. Automatic orientation/region detection is not implemented.
 
-Production Free CPU/memory/startup, the real AI binding, quota handling and the
-actual ChatGPT-to-kDrive tool flow still need validation. Direct REST tests use a
-fixture-backed kDrive client and do not establish those production behaviors.
+Production Free CPU/memory/startup enforcement, deployed binding configuration,
+actual quota exhaustion behavior and the ChatGPT-to-kDrive tool flow still need
+validation. Both REST and development-binding tests use a fixture-backed kDrive
+client and do not establish those production behaviors.
 Deployment requires separate authorization; account plan, remote configuration
 and the checked-in disabled flag remain unchanged.

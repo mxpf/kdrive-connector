@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-13T22:07:12.653Z",
+  "syntheticOnly": true,
+  "liveBinding": true,
+  "deploymentPerformed": false,
+  "productionLimitsVerified": false,
+  "cases": [],
+  "faultChecks": [
+    {
+      "name": "scan",
+      "mode": "live-cancel",
+      "httpStatus": 422,
+      "wallMs": 599,
+      "errorCode": "PDF_TIMEOUT",
+      "message": "OCR exceeded its deadline.",
+      "telemetry": {
+        "calls": 1,
+        "aborted": true
+      }
+    },
+    {
+      "name": "scan",
+      "mode": "live",
+      "httpStatus": 200,
+      "wallMs": 2938,
+      "result": {
+        "path": "/Synthetic/scan.pdf",
+        "fileName": "scan.pdf",
+        "byteLength": 38458,
+        "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false,
+        "responseKeys": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "service_tier",
+          "usage",
+          "prompt_logprobs",
+          "prompt_token_ids",
+          "prompt_text",
+          "kv_transfer_params",
+          "ec_transfer_params",
+          "metrics"
+        ],
+        "usage": {
+          "prompt_tokens": 440,
+          "completion_tokens": 98,
+          "total_tokens": 538,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 46.509090423583984
+        }
+      }
+    }
+  ],
+  "localReadyWallMs": 488,
+  "localColdRequestWallMs": 23,
+  "heapBefore": {
+    "usedSize": 4860296,
+    "totalSize": 5996544,
+    "embedderHeapUsedSize": 515872,
+    "backingStorageSize": 843982
+  },
+  "heapAfter": {
+    "usedSize": 8060488,
+    "totalSize": 12812288,
+    "embedderHeapUsedSize": 122272,
+    "backingStorageSize": 16404949
+  },
+  "unexpectedOutboundRequests": 0,
+  "status": "passed"
+}

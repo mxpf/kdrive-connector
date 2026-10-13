@@ -1,0 +1,514 @@
+{
+  "date": "2026-10-13T22:05:29.769Z",
+  "syntheticOnly": true,
+  "liveBinding": true,
+  "deploymentPerformed": false,
+  "productionLimitsVerified": false,
+  "cases": [
+    {
+      "name": "scan",
+      "mode": "live",
+      "httpStatus": 200,
+      "wallMs": 4430,
+      "result": {
+        "path": "/Synthetic/scan.pdf",
+        "fileName": "scan.pdf",
+        "byteLength": 38458,
+        "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false,
+        "responseKeys": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "service_tier",
+          "usage",
+          "prompt_logprobs",
+          "prompt_token_ids",
+          "prompt_text",
+          "kv_transfer_params",
+          "ec_transfer_params",
+          "metrics"
+        ],
+        "usage": {
+          "prompt_tokens": 440,
+          "completion_tokens": 98,
+          "total_tokens": 538,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 46.509090423583984
+        }
+      },
+      "localSampledActiveMs": 1494.071,
+      "heapAfter": {
+        "usedSize": 8842424,
+        "totalSize": 13336576,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 3688795
+      },
+      "missingText": []
+    },
+    {
+      "name": "forms-reversed",
+      "mode": "live",
+      "httpStatus": 200,
+      "wallMs": 2612,
+      "result": {
+        "path": "/Synthetic/forms-reversed.pdf",
+        "fileName": "forms-reversed.pdf",
+        "byteLength": 9034,
+        "sha256": "1611908171fb687e4dc94ece0885ede16f63128133c686e3e2c99f3325668cb7",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[ ] Resident\n[X] Nonresident\nCategory\nBusiness",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false,
+        "responseKeys": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "service_tier",
+          "usage",
+          "prompt_logprobs",
+          "prompt_token_ids",
+          "prompt_text",
+          "kv_transfer_params",
+          "ec_transfer_params",
+          "metrics"
+        ],
+        "usage": {
+          "prompt_tokens": 494,
+          "completion_tokens": 45,
+          "total_tokens": 539,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 33.29999923706055
+        }
+      },
+      "localSampledActiveMs": 1503.397,
+      "heapAfter": {
+        "usedSize": 11269416,
+        "totalSize": 14909440,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 21280760
+      },
+      "missingText": []
+    },
+    {
+      "name": "forms-stale",
+      "mode": "live",
+      "httpStatus": 200,
+      "wallMs": 1999,
+      "result": {
+        "path": "/Synthetic/forms-stale.pdf",
+        "fileName": "forms-stale.pdf",
+        "byteLength": 9053,
+        "sha256": "04dd565fac83c3431267c4e111c68380ea9e9c05ad63051635ce9fbee9005c94",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "SYNTHETIC FORM - FICTIONAL VALUES \nEntity\nGross amount\nResident   Nonresident\nCategory",
+            "status": "text",
+            "formFields": [
+              {
+                "name": "entity",
+                "type": "Tx",
+                "value": "CEDAR TEST LLC",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "amount",
+                "type": "Tx",
+                "value": "12345.67",
+                "status": "stored_value",
+                "issues": []
+              },
+              {
+                "name": "resident",
+                "type": "Btn",
+                "value": "Yes",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": true
+              },
+              {
+                "name": "nonresident",
+                "type": "Btn",
+                "value": "Off",
+                "status": "review_required",
+                "issues": [
+                  "CHECKBOX_RAW_VALUE_UNVERIFIED"
+                ],
+                "valueSource": "pdfjs_checkbox_state",
+                "exportValue": "Yes",
+                "checked": false
+              },
+              {
+                "name": "category",
+                "type": "Ch",
+                "value": [
+                  "Business"
+                ],
+                "status": "stored_value",
+                "issues": []
+              }
+            ]
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[X] Resident\n[ ] Nonresident\nCategory\nBusiness",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 780,
+          "imageHeight": 509,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 84,
+              "y": 59,
+              "width": 780,
+              "height": 509
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false,
+        "responseKeys": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "service_tier",
+          "usage",
+          "prompt_logprobs",
+          "prompt_token_ids",
+          "prompt_text",
+          "kv_transfer_params",
+          "ec_transfer_params",
+          "metrics"
+        ],
+        "usage": {
+          "prompt_tokens": 494,
+          "completion_tokens": 45,
+          "total_tokens": 539,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 33.29999923706055
+        }
+      },
+      "localSampledActiveMs": 748.563,
+      "heapAfter": {
+        "usedSize": 9423564,
+        "totalSize": 12288000,
+        "embedderHeapUsedSize": 240368,
+        "backingStorageSize": 19002487
+      },
+      "missingText": []
+    },
+    {
+      "name": "encrypted-scan",
+      "mode": "live",
+      "httpStatus": 200,
+      "wallMs": 22848,
+      "result": {
+        "path": "/Synthetic/encrypted-scan.pdf",
+        "fileName": "encrypted-scan.pdf",
+        "byteLength": 39607,
+        "sha256": "21b4f93a4d038b9aba86c89a0ea8a85650068be57367a8386f40071e033c747e",
+        "totalPages": 1,
+        "startPage": 1,
+        "endPage": 1,
+        "pages": [
+          {
+            "page": 1,
+            "text": "",
+            "status": "no_text",
+            "formFields": []
+          }
+        ],
+        "hasMore": false,
+        "nextPage": null,
+        "extraction": "pdf_text_layer",
+        "forms": {
+          "source": "acroform_parsed_values",
+          "checkboxValues": "pdfjs_normalized_appearance_state",
+          "xfaPresent": false,
+          "appearanceVerified": false,
+          "scope": "widgets_on_selected_pages"
+        },
+        "warnings": [
+          "Reading order and table layout may differ from the visual PDF. Images and non-form annotations are not extracted as text.",
+          "Text/choice values are stored PDF values; checkbox states have separate provenance. Values are not visually verified. Stale appearances, hidden/non-widget fields, signatures and scripts are not evaluated. Review fields marked review_required; password fields are redacted.",
+          "Checkbox values are PDF.js normalized states, which may come from /AS rather than raw /V. They are marked CHECKBOX_RAW_VALUE_UNVERIFIED; matching tree/widget values do not independently verify raw storage or visible marks.",
+          "OCR is an unverified visual transcription and may omit or invent text. Check amounts, dates and selected marks. OCR does not override stored form values; resolve discrepancies before relying on either."
+        ],
+        "ocr": {
+          "page": 1,
+          "text": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+          "source": "cloudflare_workers_ai",
+          "model": "@cf/qwen/qwen3.8-27b",
+          "status": "review_required",
+          "imageWidth": 689,
+          "imageHeight": 476,
+          "preparation": {
+            "scope": "full_page",
+            "sourceWidth": 1224,
+            "sourceHeight": 1584,
+            "region": null,
+            "rotation": 0,
+            "crop": {
+              "x": 83,
+              "y": 132,
+              "width": 689,
+              "height": 476
+            },
+            "whiteMarginsTrimmed": true
+          }
+        }
+      },
+      "telemetry": {
+        "calls": 1,
+        "aborted": false,
+        "responseKeys": [
+          "choices",
+          "created",
+          "ec_transfer_params",
+          "id",
+          "kv_transfer_params",
+          "metrics",
+          "model",
+          "object",
+          "prompt_logprobs",
+          "prompt_text",
+          "prompt_token_ids",
+          "service_tier",
+          "usage"
+        ],
+        "usage": {
+          "prompt_tokens": 440,
+          "completion_tokens": 98,
+          "total_tokens": 538,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "neurons": 46.509090423583984
+        }
+      },
+      "localSampledActiveMs": 2555.817,
+      "heapAfter": {
+        "usedSize": 9316204,
+        "totalSize": 14647296,
+        "embedderHeapUsedSize": 100352,
+        "backingStorageSize": 18514788
+      },
+      "missingText": []
+    }
+  ],
+  "faultChecks": [],
+  "localReadyWallMs": 812,
+  "localColdRequestWallMs": 46,
+  "heapBefore": {
+    "usedSize": 4859760,
+    "totalSize": 5996544,
+    "embedderHeapUsedSize": 515872,
+    "backingStorageSize": 843982
+  },
+  "heapAfter": {
+    "usedSize": 9316204,
+    "totalSize": 14647296,
+    "embedderHeapUsedSize": 100352,
+    "backingStorageSize": 18514788
+  },
+  "unexpectedOutboundRequests": 0,
+  "status": "passed"
+}

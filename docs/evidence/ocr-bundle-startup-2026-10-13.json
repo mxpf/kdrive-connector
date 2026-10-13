@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-13T22:07:14.085Z",
+  "deploymentPerformed": false,
+  "localReadyWallMs": 1322,
+  "localColdMetadataRequestWallMs": 94,
+  "httpStatus": 200,
+  "metadataValid": true,
+  "unexpectedOutboundRequests": 0,
+  "bundleBytes": 11538837,
+  "productionStartupVerified": false
+}
