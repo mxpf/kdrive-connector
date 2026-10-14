@@ -61,6 +61,9 @@ export function transformOcrRaster(image: { data: Uint8Array; width: number; hei
       region: region ?? null, rotation,
       crop: { x: x0, y: y0, width: cropWidth, height: cropHeight },
       whiteMarginsTrimmed: x0 !== left || y0 !== top || x1 !== right || y1 !== bottom,
+      // Only describes the selected raster at this rendering resolution, not
+      // the PDF's underlying objects or any pixels outside an explicit region.
+      allPixelsOpaqueWhite: !hasInk,
     },
   };
 }

@@ -8,6 +8,35 @@ failures. Explicit rotation correction, margin removal and region scope remain
 unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
+Local follow-up (not deployed): entirely opaque-white rendered pages/regions
+now return `ocr.text: ""`, `status: "no_text_detected"`, `source: "pdf_render"`
+and `model: null` without calling Workers AI. Previously the model could return
+the literal characters `""`, which were incorrectly presented as a nonempty
+transcription. `preparation.allPixelsOpaqueWhite` records the pixel check at
+the bounded rendering resolution; it does not claim that the underlying PDF
+has no objects or that content outside a selected region is blank. Even one
+nonwhite or nonopaque pixel still takes the normal OCR path. Quotation marks
+on nonwhite images are preserved as unverified transcription, not silently
+deleted. The model, prompt, limits, plan and production deployment are unchanged.
+Regression fixtures contain only synthetic content; no private PDF or extracted
+values are included in the repository.
+
+Validation: a read-only local replay of the already-synced affected file matched
+its previously verified kDrive checksum. PDFium found only opaque-white pixels;
+independent Poppler rendering at 300 dpi was also entirely white. The patched
+reader returned empty text with renderer provenance and zero provider calls;
+the source checksum, size and modification time were unchanged. Temporary
+inspection images were removed. No new upload, live inference or deployment
+was performed for this fix.
+
+All 201 root tests, 25 Worker tests, three local workerd HTTP tests and two
+independent-client/Python integration tests pass, as do both type checks and
+the Node build. An initial concurrent run hit an unrelated CLI subprocess
+timeout; the isolated check and full root rerun with `--test-concurrency=2`
+passed. Integration tests used the bundled Python with `pypdf` after the default
+Python lacked that dependency. These are local checks, not a new CI or deployed
+ChatGPT acceptance run.
+
 ## Architecture and Free-plan fit
 
 The reader downloads a pinned kDrive version, checks the complete byte length
@@ -54,7 +83,7 @@ uses existing text/structure, which does not establish scanned-page OCR.
 | `path` | Exact kDrive file path; arbitrary source URLs are not accepted |
 | `startPage` | One-based page, default 1 |
 | `pageCount` | 1–5, default 5 for text/forms; exactly 1, default 1, with OCR |
-| `ocr` | Default false. Explicit true requires configured OCR and sends one rendered page to Workers AI |
+| `ocr` | Default false. Explicit true requires configured OCR and sends at most one rendered page to Workers AI; the local white-raster fix skips inference for opaque-white selections |
 | `ocrRotation` | Optional clockwise correction: 0, 90, 180 or 270, after PDF display rotation; orientation is never guessed |
 | `ocrRegion` | Optional `{x,y,width,height}` fractions of the displayed page, top-left origin, before correction; width/height at least 0.01, rectangle entirely inside page |
 | `expectedSha256` | Carry the first result's digest on later batches to reject changed file versions |
@@ -69,7 +98,7 @@ closed; only the observed `stop` marker is accepted. A normal generation stop
 does not establish accurate or complete transcription.
 
 Image preparation retains the same two-million-pixel ceiling. There is still
-one model call per requested page/region, with no automatic orientation search,
+at most one model call per requested page/region, with no automatic orientation search,
 tilings or retries. A later region call re-downloads the source; carry
 `expectedSha256` to ensure it is the same version. OCR options require `ocr=true`.
 
@@ -90,7 +119,9 @@ Results retain separate sources:
 - `ocr`: optional page-numbered visual transcription, model, image dimensions
   and `review_required`/`no_text_detected` status. `preparation` records full-page
   versus region scope, requested region, source dimensions, pixel crop and
-  clockwise correction. A region result never claims full-page coverage. It
+  clockwise correction. The local fix adds `allPixelsOpaqueWhite` and uses
+  `source: "pdf_render"` / `model: null` when that pixel check skips inference.
+  A region result never claims full-page coverage. It
   never overwrites form values
   or original text, and no numeric confidence is invented.
 - Complete-file byte length/SHA-256, page continuation, form scope and warnings.

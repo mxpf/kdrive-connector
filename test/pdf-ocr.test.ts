@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
-import { decode } from 'fast-png';
+import { decode, encode } from 'fast-png';
 import { readKDrivePdf, registerPdfTools } from '../src/pdf-tools.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -59,6 +59,51 @@ test('scanned PDF flows through complete download, hash, full-page rendering and
   assert.match(result.warnings.join(' '), /may omit or invent/);
   assert.ok(!result.warnings.join(' ').includes('no OCR was performed'));
   assert.ok(!JSON.stringify(result).includes('data:image'));
+});
+
+test('opaque-white scanned page returns empty text with renderer provenance and no AI call', async () => {
+  const scan = scannedPdf(encode({width:100,height:100,channels:4,data:new Uint8Array(100*100*4).fill(255)}));
+  let calls = 0;
+  const result = await readKDrivePdf(client(scan),42,{path:'/synthetic-blank.pdf',ocr:true},
+    mockRuntime(async () => { calls++; return '""'; }));
+  assert.equal(result.pages[0].status,'no_text');
+  assert.equal(result.ocr?.text,'');
+  assert.equal(result.ocr?.status,'no_text_detected');
+  assert.equal(result.ocr?.source,'pdf_render');
+  assert.equal(result.ocr?.model,null);
+  assert.equal(result.ocr?.preparation?.allPixelsOpaqueWhite,true);
+  assert.equal(result.ocr?.preparation?.scope,'full_page');
+  assert.equal(result.sha256,createHash('sha256').update(scan).digest('hex'));
+  assert.match(result.warnings.join(' '),/No AI inference was performed/);
+  assert.equal(calls,0);
+});
+
+test('empty selected region does not imply the rest of the page is empty', async () => {
+  let calls=0;
+  const result=await readKDrivePdf(client(),42,{path:'/fixture.pdf',ocr:true,
+    ocrRegion:{x:0,y:0,width:.02,height:.02},ocrRotation:90},
+    mockRuntime(async()=>{calls++;return '""';}));
+  assert.match(result.pages[0].text,/ORCHID-7319/);
+  assert.equal(result.ocr?.text,'');
+  assert.equal(result.ocr?.source,'pdf_render');
+  assert.equal(result.ocr?.preparation?.allPixelsOpaqueWhite,true);
+  assert.equal(result.ocr?.preparation?.scope,'region');
+  assert.match(result.warnings.join(' '),/not the complete page/);
+  assert.equal(calls,0);
+});
+
+test('nonwhite raster retains literal quotation marks and review status from the model', async () => {
+  let calls=0;
+  const result=await readKDrivePdf(client(),42,{path:'/fixture.pdf',ocr:true},{
+    render:renderPdfOcrPage,
+    provider:cloudflareOcrProvider({run:async()=>{calls++;return completion(' "" ');}}),
+  });
+  assert.equal(result.ocr?.preparation?.allPixelsOpaqueWhite,false);
+  assert.equal(result.ocr?.text,'""');
+  assert.equal(result.ocr?.status,'review_required');
+  assert.equal(result.ocr?.source,'cloudflare_workers_ai');
+  assert.equal(result.ocr?.model,PDF_OCR_MODEL);
+  assert.equal(calls,1);
 });
 
 test('OCR is explicit, unavailable without configuration, one page only and never invoked before integrity checks', async () => {

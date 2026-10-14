@@ -16,9 +16,19 @@ test('white margin removal preserves even one faint edge pixel and padding', () 
   assert.equal(result.data[(50 * 75 + 50) * 4],0);
   assert.equal(result.preparation.scope,'full_page');
   assert.equal(result.preparation.whiteMarginsTrimmed,true);
+  assert.equal(result.preparation.allPixelsOpaqueWhite,false);
   const blank = transformOcrRaster({data:new Uint8Array(40000).fill(255),width:100,height:100});
   assert.equal(blank.width,100); assert.equal(blank.height,100);
   assert.equal(blank.preparation.whiteMarginsTrimmed,false);
+  assert.equal(blank.preparation.allPixelsOpaqueWhite,true);
+});
+
+test('blank detection never thresholds away faint, colored or transparent pixels', () => {
+  for (const pixel of [[254,255,255,255],[255,254,255,255],[255,255,254,255],[255,255,255,254]]) {
+    const data=new Uint8Array(10*10*4).fill(255);
+    data.set(pixel,4*55);
+    assert.equal(transformOcrRaster({data,width:10,height:10}).preparation.allPixelsOpaqueWhite,false);
+  }
 });
 
 test('quarter-turn correction is lossless, clockwise and does not infer orientation', () => {

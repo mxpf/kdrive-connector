@@ -22,9 +22,10 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
             resolveBinaryVersion: async () => ({ file: { id: 7, name: 'fixture.pdf', size: bytes.length }, versionId: 'v1' }),
             downloadVersionStream: async () => new Response(bytes),
           };
-          const result = await readKDrivePdf(client, 42, { path: '/fixture.pdf', ocr: true, ocrRotation: 270, ocrRegion: {x:0,y:0,width:1,height:.5}, password: input.encrypted ? 'synthetic-open-password' : undefined }, {
+          const result = await readKDrivePdf(client, 42, { path: '/fixture.pdf', ocr: true, ocrRotation: 270, ocrRegion: input.blankRegion ? {x:0,y:0,width:.02,height:.02} : {x:0,y:0,width:1,height:.5}, password: input.encrypted ? 'synthetic-open-password' : undefined }, {
             render: (bytes, page, password, options) => renderPdfOcrPage(bytes, page, password, options, wasm),
             provider: cloudflareOcrProvider({ run: async (model, payload) => {
+              if (input.blankRegion) throw new Error('White region must not invoke AI');
               if (!payload.messages[1].content[0].image_url.url.startsWith('data:image/png;base64,iVBOR')) throw new Error('Invalid PNG input');
               return { choices: [{ message: {role: 'assistant', content: 'MOCK OCR RESPONSE'}, finish_reason: 'stop' }], usage: { neurons: 30 } };
             } }),
@@ -64,6 +65,16 @@ test('PDFium renders ordinary and encrypted pages in workerd using bundled WASM 
       assert.equal(result.ocr.preparation.scope,'region');
       assert.ok(result.ocr.imageWidth*result.ocr.imageHeight<=2000000);
       assert.equal(result.byteLength, fixtures[encrypted ? 1 : 0].length);
+      const blank = await fetch(url, { method: 'POST', body: JSON.stringify({ encrypted, pipeline: true, blankRegion: true }) });
+      assert.equal(blank.status, 200);
+      const blankResult = await blank.json();
+      assert.equal(blankResult.ocr.text, '');
+      assert.equal(blankResult.ocr.status, 'no_text_detected');
+      assert.equal(blankResult.ocr.source, 'pdf_render');
+      assert.equal(blankResult.ocr.model, null);
+      assert.equal(blankResult.ocr.preparation.allPixelsOpaqueWhite, true);
+      assert.equal(blankResult.ocr.preparation.scope, 'region');
+      assert.match(blankResult.pages[0].text, /ORCHID-7319/);
     }
     assert.equal(outbound, 0);
   } finally { await mf.dispose(); }

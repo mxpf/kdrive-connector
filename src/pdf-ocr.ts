@@ -16,6 +16,15 @@ export async function runPdfOcr(runtime: PdfOcrRuntime, bytes: Uint8Array, page:
     signal.throwIfAborted();
     const image = await runtime.render(bytes, page, password, options);
     signal.throwIfAborted();
+    // A model can spell an empty answer as a pair of literal quotation marks.
+    // Prove the rendered selection is white instead of stripping punctuation
+    // that could actually be printed on a nonblank page. This also saves an
+    // inference call without thresholding away faint ink or scan backgrounds.
+    if (image.preparation?.allPixelsOpaqueWhite === true) {
+      return { page, text: "", source: "pdf_render" as const, model: null,
+        status: "no_text_detected" as const, imageWidth: image.width,
+        imageHeight: image.height, preparation: image.preparation };
+    }
     let onAbort!: () => void;
     const aborted = new Promise<never>((_, reject) => {
       onAbort = () => reject(new PdfReadError("PDF_TIMEOUT", "OCR exceeded its deadline."));
