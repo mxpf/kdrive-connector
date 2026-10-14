@@ -1,0 +1,99 @@
+{
+  "syntheticOnly": true,
+  "date": "2026-10-13",
+  "folder": "/Private/OCR QA 2026-10-13",
+  "verified": true,
+  "totalBytes": 357459,
+  "files": [
+    {
+      "path": "/Private/OCR QA 2026-10-13/scan.pdf",
+      "status": "verified",
+      "size_bytes": 38458,
+      "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/rotated.pdf",
+      "status": "verified",
+      "size_bytes": 38382,
+      "sha256": "1cd0cbc37e1bc4bd71453ad9a4e59fdc32585ef01f0acecbcd5d97d410b10131"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/mixed.pdf",
+      "status": "verified",
+      "size_bytes": 38525,
+      "sha256": "623432857e3556923093ac332e80bd88dcc989d17f35c639ccd32e1ca9883e4c"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/small-print.pdf",
+      "status": "verified",
+      "size_bytes": 22428,
+      "sha256": "16b64b1c616889873d3b36ad74872d0f9c466f8ba3b3bda264dc4816cc913077"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/multilingual.pdf",
+      "status": "verified",
+      "size_bytes": 22845,
+      "sha256": "10f8e3da8104ae8469ec51148c6943a7ca6c11563e390ecad633f88441ae5ffa"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms.pdf",
+      "status": "verified",
+      "size_bytes": 9034,
+      "sha256": "1354b161bc1808407c05ae23ebdae700e61cacd4ba6ab9da75ec5301d60bb939"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms-reversed.pdf",
+      "status": "verified",
+      "size_bytes": 9034,
+      "sha256": "1611908171fb687e4dc94ece0885ede16f63128133c686e3e2c99f3325668cb7"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms-empty.pdf",
+      "status": "verified",
+      "size_bytes": 9034,
+      "sha256": "a882d725f9dd7364840c332f1f3b058d8483a44646782939f75ceb9152534b21"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms-both.pdf",
+      "status": "verified",
+      "size_bytes": 9034,
+      "sha256": "b02f97c44bb68f6810af3f929f0a9ba0d0bb79f4f66899c2f0f1b1ef4ada4a01"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms-flattened.pdf",
+      "status": "verified",
+      "size_bytes": 32502,
+      "sha256": "3ebbb11022e692acd12917f732d476bd34d37248552c1006dc819ad2689c9cf1"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/forms-stale.pdf",
+      "status": "verified",
+      "size_bytes": 9053,
+      "sha256": "04dd565fac83c3431267c4e111c68380ea9e9c05ad63051635ce9fbee9005c94"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/encrypted-scan.pdf",
+      "status": "verified",
+      "size_bytes": 39607,
+      "sha256": "21b4f93a4d038b9aba86c89a0ea8a85650068be57367a8386f40071e033c747e"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/sideways-heldout.pdf",
+      "status": "verified",
+      "size_bytes": 35700,
+      "sha256": "ef8fc88983460a0eb8fddcb0368c69a62d6f27111042789663c9a3d876c15983"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/upside-down-heldout.pdf",
+      "status": "verified",
+      "size_bytes": 26126,
+      "sha256": "da1c5d2c4ff26b1dec5f03cae5ee9fb818ebc1ec099066a0d7472919d5e5e727"
+    },
+    {
+      "path": "/Private/OCR QA 2026-10-13/region-heldout.pdf",
+      "status": "verified",
+      "size_bytes": 17697,
+      "sha256": "a9b320e79d97c3ea1f21e43fe8af1db10c76f9746e2a5faa5568e82191ad240e"
+    }
+  ]
+}

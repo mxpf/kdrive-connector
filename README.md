@@ -24,10 +24,10 @@ These are recorded observations, not guarantees for every host or account.
 | --- | --- | --- |
 | Everyday file management | Natural paths, search, metadata, folder creation, and text uploads | Search/text previews depend on provider support; listings may be paginated |
 | Change safety | Prepared, version-bound sensitive changes; new-file uploads reject conflicts | Host approval and authentication still matter; permanent deletion is not exposed |
-| Presentation | Rich cards and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
+| Presentation | Compact expandable rows and private Open in kDrive links | `openUrl` is a human-facing page, not a raw-file download |
 | Binary uploads | Native host file adapter, bounded streaming, checksums, no base64 in model context | Host must resolve the file; exact source-host allowlist can reject newly selected regions |
 | Binary exports | Short-lived raw-byte references, pinned version, size and SHA-256 | Downstream tools must support that reference or an explicit import bridge |
-| Direct PDF reading (source; undeployed) | Page-numbered PDF text returned to ChatGPT without Adobe or re-upload | Text and stored forms; 5 MiB, 200 pages; optional OCR supports rotation/regions and checkbox transcription; remains disabled pending production validation |
+| Direct PDF reading | Page-numbered PDF text returned to ChatGPT without Adobe or re-upload | Text and stored forms; 5 MiB, 200 pages; explicit one-page OCR supports rotation/regions and checkbox transcription on Workers Free |
 | Local large-file transfers | Direct kDrive upload/download with independent SHA-256 verification, bypassing the Worker | Local credentials and files required; 1 GiB ceiling, with one live 269 MB round trip verified |
 
 Live checks passed for synthetic PNG, SVG, PDF, ZIP-format, and Markdown files,
@@ -293,12 +293,12 @@ page-numbered text directly. It bypasses the Adobe attachment handoff. Start wit
 `path`, follow `nextPage`, and carry the first result's `sha256` as
 `expectedSha256` on later calls. Password-protected PDFs accept an optional
 user-authorized password. Stored form values now include consistency checks.
-Optional `ocr=true` renders one page for Cloudflare Workers AI; it remains
-disabled pending production validation. Qwen vision transcription addresses the
+Optional `ocr=true` renders one page for Cloudflare Workers AI. It was enabled
+with the authorized October 13 deployment on Workers Free. Qwen vision transcription addresses the
 previous checkbox failure; explicit rotation correction, pure-white margin
 removal and region selection remain supported. Parsed checkbox states include
 source/review warnings because PDF.js can normalize them from appearance state. XFA, form appearances and visual table structure
-are not guaranteed. This implementation is **not deployed yet**; see
+are not guaranteed. See
 [limits and verification](docs/pdf-extraction.md).
 
 For binary files, use **native file reference first, signed HTTPS fallback, inline base64 only for small files**. The model exchanges references and metadata, not file bytes.
@@ -337,7 +337,7 @@ Adobe extraction succeeded through this host's local-file adapter, including a
 synthetic copy unlocked with its known password. Source fixes provide an explicit
 `TEXT_PREVIEW_UNAVAILABLE` recovery action, identified download clients, clearer
 HTTP 403 diagnostics, and Worker streams with a preserved byte-length header.
-They are not deployed. ChatGPT runtimes without a native file-import bridge still
+These fixes shipped with the October 13 deployment. ChatGPT runtimes without a native file-import bridge still
 have the Adobe storage-type limitation. See the [investigation and test evidence](docs/binary-interop-0.3.1.md)
 for the exact coverage and the remaining acceptance boundary.
 

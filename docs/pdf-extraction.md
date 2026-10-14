@@ -1,8 +1,8 @@
 # Direct PDF extraction on Cloudflare Free
 
-Status (2026-10-13, capability revision `2026-10-13.7`): **source implemented;
-not deployed**. `kdrive_read_pdf` returns text and stored AcroForm values directly
-to ChatGPT. Optional scanned-page OCR is implemented but **disabled by default**;
+Status (2026-10-13, capability revision `2026-10-13.7`): **deployed with OCR enabled
+on Workers Free**. `kdrive_read_pdf` returns text and stored AcroForm values directly
+to ChatGPT. Scanned-page OCR requires **explicit `ocr=true` on each call**;
 OCR now uses a different Cloudflare vision model to address the prior checkbox
 failures. Explicit rotation correction, margin removal and region scope remain
 unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
@@ -128,16 +128,19 @@ Reading order and visual table layout are not guaranteed.
 
 ## Configuration and privacy
 
-Checked-in configuration has `KDRIVE_PDF_OCR_ENABLED="false"` and no AI binding.
+The authorized October 13 deployment has `KDRIVE_PDF_OCR_ENABLED="true"` and
+`"ai": { "binding": "AI" }` in the checked-in configuration.
 Text and forms require no new service. An explicit OCR request returns
 `PDF_OCR_UNAVAILABLE` before any download unless both flag and binding exist.
 Node stdio has no configured OCR provider; text and forms continue to work.
 
-For a later, separately authorized enablement, add the Wrangler AI binding
-`"ai": { "binding": "AI" }` and set the flag to `"true"`, keeping Workers Free.
-Do not enable it before synthetic live acceptance. Workers AI development calls
-can use remote inference; local test suites instead supply mocks and block
-outbound network. No binding or account setting was changed remotely in this work.
+To disable OCR, set the flag to `"false"` and redeploy; text and forms remain
+available. Confirm `pdf_ocr=false` through `kdrive_connection_status` and confirm
+an explicit OCR call returns `PDF_OCR_UNAVAILABLE`. No plan change is needed.
+Workers AI development calls can use remote inference. Unit tests explicitly
+set `remoteBindings: false` and disable OCR; extraction/rendering suites use
+mocks and block outbound network. CI needs no Cloudflare credentials and does
+not deploy. The account remains Workers Free.
 
 No document bytes, extracted data or passwords are logged/cached/persisted by
 these modules. OCR sends the **visible page image** to Cloudflare AI: it may
@@ -178,7 +181,8 @@ Run root `npm run check`, `npm test`, `npm run build`, `npm run test:pdf`; then
 remote `npm run type-check`, `npm test`, `npm run test:http`. Python integration
 requires `pypdf`; `KDRIVE_TEST_PYTHON` can select the bundled workspace Python.
 Install both root and remote dependencies. CI runs on macOS and Ubuntu and does
-not deploy. No Worker upload or deployment was performed.
+not deploy. These pre-release checks performed no Worker upload or deployment;
+the separately authorized production deployment is recorded below.
 
 ### Initial live synthetic acceptance: 2026-10-13
 
@@ -256,7 +260,7 @@ checkbox fields instead of falsely accepting them as independent stored values.
 Visual recognition is still assessed against actual rendered marks, including
 on a flattened PDF that has no stored fields.
 
-### Remaining release gates
+### Pre-deployment gates and production follow-up
 
 The [binding/runtime validation](evidence/ocr-binding-runtime-2026-10-13.md)
 now passes through the real `env.AI.run` development binding: four synthetic
@@ -265,14 +269,15 @@ passed the local rendering pipeline; the 45-second deadline, busy guard and
 simulated quota errors were verified. No production implementation change was
 needed. Full-bundle startup and resource diagnostics are local measurements.
 
-OCR stays disabled pending separately authorized deployment and production
-validation. Passing synthetic cases does not establish dense-page or arbitrary-scan
+The later authorized production deployment enabled OCR and exercised the full
+ChatGPT-to-kDrive flow with only the 15 synthetic PDFs. See the
+[production release record](evidence/ocr-production-2026-10-13.md).
+Passing synthetic cases does not establish dense-page or arbitrary-scan
 accuracy. Explicit region selection needs known layout; orientation correction
 needs known orientation. Automatic orientation/region detection is not implemented.
 
-Production Free CPU/memory/startup enforcement, deployed binding configuration,
-actual quota exhaustion behavior and the ChatGPT-to-kDrive tool flow still need
-validation. Both REST and development-binding tests use a fixture-backed kDrive
-client and do not establish those production behaviors.
-Deployment requires separate authorization; account plan, remote configuration
-and the checked-in disabled flag remain unchanged.
+Production startup was 75 ms, and synthetic reads completed under the actual
+Free deployment with its real AI binding. Peak CPU/memory and pathological-input
+behavior are not certified by those successful reads. Real daily quota exhaustion
+was not induced. The earlier REST and development-binding tests used a
+fixture-backed client; the production record distinguishes actual kDrive reads.

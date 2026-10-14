@@ -1,5 +1,9 @@
 # Real AI binding and runtime validation — 2026-10-13
 
+Later follow-up: the separately authorized [production deployment and ChatGPT
+acceptance](ocr-production-2026-10-13.md) passed. The development-only evidence
+and limits below describe the earlier run and are retained unchanged.
+
 **The real AI binding, connector timeout and recovery checks passed. No connector
 deployment or OCR enablement was performed. Cloudflare Workers Free is unchanged.**
 Production resource enforcement and the complete ChatGPT flow remain unverified.

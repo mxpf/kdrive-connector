@@ -98,10 +98,10 @@ Source revision `2026-10-13.7` also adds `kdrive_read_pdf` for direct text readi
 inside the existing SQLite MCP Durable Object, bypassing Adobe and native file
 import. It supports 5 MiB PDFs, up to 200 pages, in batches of five pages. It also
 extracts stored AcroForm values with consistency warnings. Optional one-page
-Workers AI OCR now uses Qwen 3.8 27B for checkbox-aware transcription and remains
-disabled pending production validation. Parsed checkbox states carry explicit
+Workers AI OCR uses Qwen 3.8 27B for checkbox-aware transcription and was enabled
+in the authorized October 13 deployment. Parsed checkbox states carry explicit
 source/review warnings. Rotation and region selection preserve scope in results.
-The default configuration adds no AI binding or plan change and is **not deployed yet**. See [design and test evidence](../docs/pdf-extraction.md).
+The deployed configuration has an `AI` binding and `KDRIVE_PDF_OCR_ENABLED="true"`; each call still defaults to `ocr=false`. Workers Free is unchanged. Unit tests disable remote bindings and OCR, and require no Cloudflare credentials. See [design and test evidence](../docs/pdf-extraction.md).
 
 The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and
 `kdrive_upload_from_url`. The `/binary/:token` endpoint serves raw, version-pinned

@@ -1,0 +1,247 @@
+{
+  "source": "Comparison of ChatGPT host-reported OCR/results to independent pre-upload synthetic fixtures, not raw MCP logs",
+  "syntheticOnly": true,
+  "passed": true,
+  "cases": [
+    {
+      "name": "scan",
+      "byteLength": 38458,
+      "sha256": "72bdbb76f53eda6f9c4d2e98e6ce226042a533535ee1a0de2e989bb5142a3e44",
+      "ocrText": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "rotated",
+      "byteLength": 38382,
+      "sha256": "1cd0cbc37e1bc4bd71453ad9a4e59fdc32585ef01f0acecbcd5d97d410b10131",
+      "ocrText": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "mixed",
+      "byteLength": 38525,
+      "sha256": "623432857e3556923093ac332e80bd88dcc989d17f35c639ccd32e1ca9883e4c",
+      "ocrText": "MIXED TEXT LAYER: CEDAR-4826\nSYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "small-print",
+      "byteLength": 22428,
+      "sha256": "16b64b1c616889873d3b36ad74872d0f9c466f8ba3b3bda264dc4816cc913077",
+      "ocrText": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident [ ] Nonresident\nSmall print: 0.01 1,001.10 10,010.01 -42.50",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "multilingual",
+      "byteLength": 22845,
+      "sha256": "10f8e3da8104ae8469ec51148c6943a7ca6c11563e390ecad633f88441ae5ffa",
+      "ocrText": "SYNTHETIC OCR TEST - FICTIONAL VALUES\nName: Anna Müller\nReçu: déjà payé\nBetrag: 1.234,56 EUR\nRéférence: ÉTÉ-2025",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms",
+      "byteLength": 9034,
+      "sha256": "1354b161bc1808407c05ae23ebdae700e61cacd4ba6ab9da75ec5301d60bb939",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[X] Resident\n[ ] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms-reversed",
+      "byteLength": 9034,
+      "sha256": "1611908171fb687e4dc94ece0885ede16f63128133c686e3e2c99f3325668cb7",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[ ] Resident\n[X] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms-empty",
+      "byteLength": 9034,
+      "sha256": "a882d725f9dd7364840c332f1f3b058d8483a44646782939f75ceb9152534b21",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[ ] Resident\n[ ] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms-both",
+      "byteLength": 9034,
+      "sha256": "b02f97c44bb68f6810af3f929f0a9ba0d0bb79f4f66899c2f0f1b1ef4ada4a01",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[X] Resident\n[X] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms-flattened",
+      "byteLength": 32502,
+      "sha256": "3ebbb11022e692acd12917f732d476bd34d37248552c1006dc819ad2689c9cf1",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[X] Resident\n[ ] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "forms-stale",
+      "byteLength": 9053,
+      "sha256": "04dd565fac83c3431267c4e111c68380ea9e9c05ad63051635ce9fbee9005c94",
+      "ocrText": "SYNTHETIC FORM - FICTIONAL VALUES\nEntity\nCEDAR TEST LLC\nGross amount\n12345.67\n[X] Resident\n[ ] Nonresident\nCategory\nBusiness",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "encrypted-scan",
+      "byteLength": 39607,
+      "sha256": "21b4f93a4d038b9aba86c89a0ea8a85650068be57367a8386f40071e033c747e",
+      "ocrText": "SYNTHETIC OCR TEST - NOT A REAL TAX RECORD\nFixture: CEDAR-4826\nTax year: 2025\nGross amount: $12,345.67\nDeduction: $890.12\nNet amount: $11,455.55\nPayment date: 2025-12-31\n[X] Resident  [ ] Nonresident",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "sideways-heldout",
+      "byteLength": 35700,
+      "sha256": "ef8fc88983460a0eb8fddcb0368c69a62d6f27111042789663c9a3d876c15983",
+      "ocrText": "SYNTHETIC INVOICE - FICTIONAL\nInvoice: MAPLE-9361\nDate: 2026-04-09\nSubtotal: 8,008.80\nAdjustment: -0.05\n[ ] Approved [X] Pending",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "upside-down-heldout",
+      "byteLength": 26126,
+      "sha256": "da1c5d2c4ff26b1dec5f03cae5ee9fb818ebc1ec099066a0d7472919d5e5e727",
+      "ocrText": "SYNTHETIC INVOICE - FICTIONAL\nInvoice: MAPLE-9361\nDate: 2026-04-09\nSubtotal: 8,008.80\nAdjustment: -0.05\n[ ] Approved [X] Pending",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    },
+    {
+      "name": "region-heldout",
+      "byteLength": 17697,
+      "sha256": "a9b320e79d97c3ea1f21e43fe8af1db10c76f9746e2a5faa5568e82191ad240e",
+      "ocrText": "SYNTHETIC REGION\nInvoice: BIRCH-2750\nCredit: 7,070.07\nFee: -0.09\n[X] Verified  [ ] Pending\n\nThe OCR transcription covers only the selected region, not the complete page.\n\n---",
+      "checks": {
+        "phrases": true,
+        "size": true,
+        "sha256": true,
+        "scope": true,
+        "rotation": true,
+        "fields": true
+      },
+      "missing": [],
+      "passed": true
+    }
+  ]
+}

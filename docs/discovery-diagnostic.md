@@ -32,7 +32,8 @@ Four runs alternate two conditions:
 The probe accepts the deployed 17-tool catalog and the new 18-tool catalog
 (which must include `kdrive_read_pdf`), including all three binary actions,
 two or three versioned UI resources, and zero resource templates. It reports
-PDF-text capability separately; the new tool is not deployed yet.
+PDF-text capability separately. The 18-tool release was deployed on October 13;
+ChatGPT's Refresh tools action made `kdrive_read_pdf` available in a new test chat.
 Any timeout, failed request, or catalog mismatch
 returns exit status 1. It is a live regression probe, not an offline unit test.
 
