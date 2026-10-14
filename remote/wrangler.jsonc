@@ -7,6 +7,7 @@
   "name": "kdrive-connector-mcp",
   "main": "src/index.ts",
   "version_metadata": { "binding": "KDRIVE_WORKER_VERSION" },
+  "ai": { "binding": "AI" },
   "assets": {
     "directory": "./public"
   },
@@ -24,8 +25,8 @@
 	 * npx wrangler secret put KDRIVE_OPERATION_SECRET
    */
   "vars": {
-    // OCR remains opt-in. See docs/pdf-extraction.md before adding an AI binding.
-    "KDRIVE_PDF_OCR_ENABLED": "false",
+    // OCR requires an explicit per-call opt-in and remains bounded on Workers Free.
+    "KDRIVE_PDF_OCR_ENABLED": "true",
     "KDRIVE_MAX_BINARY_BYTES": "104857600",
     "KDRIVE_BINARY_SOURCE_HOSTS": "files.oaiusercontent.com,sandbox.openai.com,sdmntprcentralus.oaiusercontent.com,sdmntprnorthcentralus.oaiusercontent.com,sdmntprsoutheastus3.oaiusercontent.com,sdmntpreastus2.oaiusercontent.com,oaisdmntprnorthcentralus.blob.core.windows.net,sdmntprbrazilsouth.oaiusercontent.com,sdmntprsouthcentralus.oaiusercontent.com,sdmntprwestus.oaiusercontent.com,sdmntprnortheu.oaiusercontent.com",
 		"ALLOWED_GITHUB_LOGIN": "mxpf",
