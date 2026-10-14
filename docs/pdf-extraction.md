@@ -8,7 +8,7 @@ failures. Explicit rotation correction, margin removal and region scope remain
 unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
-Local follow-up (not deployed): entirely opaque-white rendered pages/regions
+Follow-up (not currently deployed; production trial rolled back): entirely opaque-white rendered pages/regions
 now return `ocr.text: ""`, `status: "no_text_detected"`, `source: "pdf_render"`
 and `model: null` without calling Workers AI. Previously the model could return
 the literal characters `""`, which were incorrectly presented as a nonempty
@@ -36,6 +36,12 @@ timeout; the isolated check and full root rerun with `--test-concurrency=2`
 passed. Integration tests used the bundled Python with `pypdf` after the default
 Python lacked that dependency. These are local checks, not a new CI or deployed
 ChatGPT acceptance run.
+
+The subsequent authorized deployment of `423e63f` was rolled back after the
+nonblank page returned `PDF_TIMEOUT` in ChatGPT. The blank-page check was
+reported successful, but the two-page acceptance gate did not pass. The previous
+OCR-enabled release is restored on Workers Free. See the
+[deployment and rollback record](evidence/ocr-blank-page-rollback-2026-10-13.md).
 
 ## Architecture and Free-plan fit
 
