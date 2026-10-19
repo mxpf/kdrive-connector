@@ -1,6 +1,10 @@
 # Direct PDF extraction on Cloudflare Free
 
-Status (2026-10-13, capability revision `2026-10-13.7`): **deployed with OCR enabled
+October 19 release status: deployed on Workers Free; both binary upload routes
+passed live readback. ChatGPT OCR acceptance still requires sign-in/tool refresh.
+See the [combined release record](evidence/combined-release-2026-10-19.md).
+
+Status (2026-10-19, capability revision `2026-10-19.2`): **deployed with OCR enabled
 on Workers Free**. `kdrive_read_pdf` returns text and stored AcroForm values directly
 to ChatGPT. Scanned-page OCR requires **explicit `ocr=true` on each call**;
 OCR now uses a different Cloudflare vision model to address the prior checkbox
@@ -8,13 +12,13 @@ failures. Explicit rotation correction, margin removal and region scope remain
 unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
-Timeout follow-up (2026-10-14, local revision `2026-10-14.1`, **not deployed**):
+Timeout fix (deployed October 19):
 remote OCR now runs as a bounded job and exposes `kdrive_get_pdf_ocr_result`.
 Dense-page inference can exceed the old synchronous 45-second deadline. The
 new initial response and polling calls finish promptly while one inference
 continues for up to three minutes. See the [investigation and validation record](evidence/ocr-timeout-2026-10-14.md).
 
-Follow-up (not currently deployed; production trial rolled back): entirely opaque-white rendered pages/regions
+Blank-page fix (deployed October 19): entirely opaque-white rendered pages/regions
 now return `ocr.text: ""`, `status: "no_text_detected"`, `source: "pdf_render"`
 and `model: null` without calling Workers AI. Previously the model could return
 the literal characters `""`, which were incorrectly presented as a nonempty
@@ -23,11 +27,11 @@ the bounded rendering resolution; it does not claim that the underlying PDF
 has no objects or that content outside a selected region is blank. Even one
 nonwhite or nonopaque pixel still takes the normal OCR path. Quotation marks
 on nonwhite images are preserved as unverified transcription, not silently
-deleted. The model, prompt, limits, plan and production deployment are unchanged.
+deleted. The model, prompt, rendering limits and Free plan are unchanged.
 Regression fixtures contain only synthetic content; no private PDF or extracted
 values are included in the repository.
 
-Validation: a read-only local replay of the already-synced affected file matched
+Historical pre-deployment validation: a read-only local replay of the already-synced affected file matched
 its previously verified kDrive checksum. PDFium found only opaque-white pixels;
 independent Poppler rendering at 300 dpi was also entirely white. The patched
 reader returned empty text with renderer provenance and zero provider calls;
@@ -46,7 +50,8 @@ ChatGPT acceptance run.
 The subsequent authorized deployment of `423e63f` was rolled back after the
 nonblank page returned `PDF_TIMEOUT` in ChatGPT. The blank-page check was
 reported successful, but the two-page acceptance gate did not pass. The previous
-OCR-enabled release is restored on Workers Free. See the
+OCR-enabled release was restored on Workers Free at that time. The October 19
+combined release includes both this fix and bounded OCR polling. See the
 [deployment and rollback record](evidence/ocr-blank-page-rollback-2026-10-13.md).
 
 ## Architecture and Free-plan fit
@@ -95,7 +100,7 @@ uses existing text/structure, which does not establish scanned-page OCR.
 | `path` | Exact kDrive file path; arbitrary source URLs are not accepted |
 | `startPage` | One-based page, default 1 |
 | `pageCount` | 1–5, default 5 for text/forms; exactly 1, default 1, with OCR |
-| `ocr` | Default false. Explicit true requires configured OCR and sends at most one rendered page to Workers AI; the local white-raster fix skips inference for opaque-white selections |
+| `ocr` | Default false. Explicit true requires configured OCR and sends at most one rendered page to Workers AI; the white-raster check skips inference for opaque-white selections |
 | `ocrRotation` | Optional clockwise correction: 0, 90, 180 or 270, after PDF display rotation; orientation is never guessed |
 | `ocrRegion` | Optional `{x,y,width,height}` fractions of the displayed page, top-left origin, before correction; width/height at least 0.01, rectangle entirely inside page |
 | `expectedSha256` | Carry the first result's digest on later batches to reject changed file versions |

@@ -94,6 +94,10 @@ keys in Git. The included `.gitignore` excludes local secret files.
 
 ## Binary handoff
 
+October 19 release status: deployed on Workers Free; both binary upload routes
+passed live readback. ChatGPT OCR acceptance still requires sign-in/tool refresh.
+See the [combined release record](../docs/evidence/combined-release-2026-10-19.md).
+
 Source revision `2026-10-13.7` also adds `kdrive_read_pdf` for direct text reading
 inside the existing SQLite MCP Durable Object, bypassing Adobe and native file
 import. It supports 5 MiB PDFs, up to 200 pages, in batches of five pages. It also
@@ -103,13 +107,12 @@ in the authorized October 13 deployment. Parsed checkbox states carry explicit
 source/review warnings. Rotation and region selection preserve scope in results.
 The deployed configuration has an `AI` binding and `KDRIVE_PDF_OCR_ENABLED="true"`; each call still defaults to `ocr=false`. Workers Free is unchanged. Unit tests disable remote bindings and OCR, and require no Cloudflare credentials. See [design and test evidence](../docs/pdf-extraction.md).
 
-Local capability revision `2026-10-14.1` adds bounded OCR jobs and is **not
-deployed**. Slow reads return a job ID; `kdrive_get_pdf_ocr_result` polls the same
+Deployed capability revision `2026-10-19.2` adds bounded OCR jobs. Slow reads return a job ID; `kdrive_get_pdf_ocr_result` polls the same
 job in the authenticated MCP session. `DurableObjectState.waitUntil` keeps the
 work alive after the initial reply, up to the connector's three-minute deadline.
 Results expire from memory three minutes after completion; no storage migration,
 new binding or plan change is required. Refresh the ChatGPT tool catalog after
-a future authorized deployment so the polling tool is available. Check
+deployment so the polling tool is available. Check
 `pdf_ocr_jobs=true` and `limits.pdf_ocr_job` in connection diagnostics.
 
 The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and

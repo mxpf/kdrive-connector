@@ -7,10 +7,10 @@ The reported failures occurred before kDrive upload session creation:
 | Native file adapter | `2c227100-46db-47a7-a9a0-b3d95e967a68` | Observed `sdmntprwestus2.oaiusercontent.com` absent from exact allowlist |
 | Direct Archive URL | `d478e2ad-4552-416a-b8e2-c7ee62f552d1` | Archive.org was not an approved binary ingestion source |
 
-The live connector reports build `9dd6d9ed-d4a2-467f-9c97-89b9261d0e0f`,
-capability revision `2026-10-13.7`. Existing OCR-job changes remain local and
-are not part of this binary investigation. No deployment or plan change has
-been performed.
+Before this investigation, the live connector reported build `9dd6d9ed-d4a2-467f-9c97-89b9261d0e0f`,
+capability revision `2026-10-13.7`. OCR-job changes were still local at that point. The later combined release
+authorization and deployment supersede that initial state; see the release
+record linked below.
 
 ## Exact-host correction
 
@@ -103,15 +103,15 @@ content normalized only generic `error_code` to `INVALID_ARGUMENT`, directly
 confirming the adapter behavior.
 
 The newly observed host was DNS/TLS checked and added to the exact local policy.
-No retry against the unchanged live policy was attempted. Full native and remote
-URL acceptance require deploying the binary policy patch, then using the actual
-adapter and comparing complete kDrive readbacks. The earlier instruction to hold
-deployment remains in effect pending a new deployment decision. Pending OCR
-changes must not be bundled into a binary-only release.
+No retry against the unchanged live policy was attempted. At that stage, full native and remote
+URL acceptance required deploying the binary policy patch, then using the actual
+adapter and comparing complete kDrive readbacks. The deployment hold and
+binary-only proposal were subsequently superseded by the authorization below.
 
 ## Combined release authorization
 
 On October 19 Max explicitly authorized publishing and deploying everything,
 superseding the earlier deployment hold and binary-only proposal. The reviewed
 release combines this policy fix, bounded OCR jobs and the white-page fix.
-Deployment and post-release acceptance will be recorded separately.
+Deployment and post-release acceptance are recorded in the
+[combined release record](combined-release-2026-10-19.md).

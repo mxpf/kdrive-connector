@@ -1,7 +1,9 @@
 # Nonblank OCR timeout investigation — 2026-10-14
 
-Status: **local fix, not deployed**. Workers Free remains the authorized plan.
-Production remains on the previously restored OCR-enabled release; no deployment,
+Historical status on October 14: **local fix, not deployed**.
+The fix was subsequently published and deployed in the
+[October 19 combined release](combined-release-2026-10-19.md). Workers Free remains the authorized plan.
+On October 14 production remained on the previously restored OCR-enabled release; no deployment,
 upload to kDrive, original-document modification, new binding or plan change was
 performed for this follow-up. Source capability revision is `2026-10-14.1`.
 

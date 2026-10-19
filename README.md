@@ -301,7 +301,11 @@ source/review warnings because PDF.js can normalize them from appearance state. 
 are not guaranteed. See
 [limits and verification](docs/pdf-extraction.md).
 
-The pending timeout fix (not deployed) lets remote OCR continue as a bounded
+October 19 release status: deployed on Workers Free; both binary upload routes
+passed live readback. ChatGPT OCR acceptance still requires sign-in/tool refresh.
+See the [combined release record](docs/evidence/combined-release-2026-10-19.md).
+
+The October 19 release lets remote OCR continue as a bounded
 background job. If a read returns `status: "pending"`, use
 `kdrive_get_pdf_ocr_result(jobId)` in the same connector session; do not repeat
 the read. Polling reuses the original download and inference. The job has a
@@ -329,7 +333,7 @@ completion requirements](docs/adobe-chatgpt-file-bridge-report.md#2026-10-13-con
 
 Follow the host's file-selection instructions: Codex may accept a local path as its adapter input, while the raw MCP server requires the resolved object. Do not manually convert between those representations. The deployed upload correction supplies `binary_error_code` and `trace_id`; the client may normalize its generic `error_code`. Unknown source hosts remain blocked and require exact-host review, not alternate URL spellings or public rehosting. See [current limitations](#advantages-and-current-limitations).
 
-The October 19 binary policy correction is prepared locally: it adds the observed
+The deployed October 19 binary policy correction adds the observed
 OpenAI `westus2` and `cacentral` hosts plus Archive.org and three reviewed download
 servers. Other Archive mirrors still require review. Connection diagnostics now
 expose the effective exact-host list and `binary_error_code` as the authoritative
