@@ -1,6 +1,6 @@
 # Work Mode internal-error investigation — October 19, 2026
 
-Status: **cause confirmed; fix implemented and locally validated; deployment pending CI**.
+Status: **fix deployed; connection and browsing recovered; post-reset check pending**.
 Cloudflare Free is retained. No folder creation, uploads, original-file
 modifications or credential changes were performed during this investigation.
 
@@ -147,9 +147,33 @@ Free plan, upload policy and original kDrive files are unchanged.
 
 ## Release and post-reset verification
 
-Code commit, CI run and deployed version will be recorded after their actual
-completion. The currently deployed pre-fix version is
-`f19c3e4e-0da1-4e26-b8e7-e60bd8458a14`; rolling back cannot restore quota.
+- Source commit: `9c69575b24bc4f3659829d35235380d2cd4b03e2`, pushed to `main`.
+- [CI run 39329023414](https://github.com/mxpf/kdrive-connector/actions/runs/39329023414):
+  both Linux and macOS jobs passed before deployment.
+- Deployed Worker: `b9e1d330-6150-459f-ab12-f277b7224fbe` at approximately
+  21:41 UTC / 17:41 EDT. Capability revision `2026-10-19.3`.
+- Bundle: 10,036.96 KiB uncompressed / 3,443.12 KiB gzip; startup 62 ms.
+- Existing Free plan and all bindings retained; no migration or plan upgrade.
+- Previous version, if rollback becomes necessary:
+  `f19c3e4e-0da1-4e26-b8e7-e60bd8458a14`. Rolling back cannot restore quota
+  and would reintroduce the old session-write dependency.
+
+Immediate connected-tool checks at **21:41 UTC / 17:41 EDT**, before reset:
+
+- `kdrive_connection_status({})`: succeeded on the first attempt, `connected:
+  true`, exact deployed build/revision, JSON responses, memory session storage,
+  replay disabled. Its `session_sql_writes: 0` field describes the implemented
+  transport, not a fresh production billing measurement.
+- `kdrive_list_directory({directoryPath:"/Private",limit:100})`: succeeded on
+  the first attempt; 13 items, no continuation page. Child names, paths and
+  links are intentionally omitted from this record.
+- Unauthenticated `GET /mcp`: HTTP 401 remains enforced.
+- No reauthentication, file mutation, upload or live OCR inference occurred.
+
+The immediate recovery establishes that status/browsing no longer require the
+exhausted session SQL writes. It does not by itself prove all future traffic is
+bounded or that the account quota has reset; longer-window metrics and the
+scheduled post-reset verification remain pending.
 
 A one-time follow-up is scheduled for **October 19, 20:05 EDT** (00:05 UTC
 October 20), after the 00:00 UTC quota reset. It will verify
