@@ -20,7 +20,7 @@ other remote MCP clients.
 
 ## Sessions and Free quota recovery
 
-Capability revision `2026-10-19.3` uses JSON Streamable HTTP responses and
+Capability revision `2026-10-19.4` uses JSON Streamable HTTP responses and
 memory-only MCP sessions. Initialization, discovery, status and directory reads
 perform no session SQL/KV writes. The transport no longer uses the Agents
 WebSocket bridge, response replay or standalone SSE streams; authenticated
@@ -46,17 +46,16 @@ an MCP error result; initialization returns HTTP 503 with `Retry-After`.
 Reconnecting cannot replenish a daily quota. See the
 [incident and release evidence](../docs/evidence/work-mode-quota-2026-10-19.md).
 
-## Local session cleanup follow-up (not deployed)
+## JSON session cleanup and RPC lifetimes
 
-Candidate capability `2026-10-19.4` uses byte values across the internal RPC
+Deployed capability `2026-10-19.4` uses byte values across the internal RPC
 boundary, cleans completed JSON response entries, and returns an explicit 409
 if a session closes during a pending request. File-changing calls are never
 replayed. JSON request/response bodies are bounded at 16 MiB; the existing
 10 MiB decoded inline upload limit is unchanged. Larger JSON requests should
 use the binary-reference route. The pinned SDK cleanup workaround and the
-remaining production verification gate are documented in the
+production verification results are documented in the
 [RPC investigation](../docs/evidence/rpc-disconnects-2026-10-19.md).
-Production remains capability `2026-10-19.3` until a later authorized deployment.
 
 ## Deploy
 

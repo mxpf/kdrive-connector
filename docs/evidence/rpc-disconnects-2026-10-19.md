@@ -1,9 +1,9 @@
 # RPC disconnect follow-up — October 19, 2026
 
-Status: **local fixes tested; not deployed**. Cloudflare Free is unchanged.
-Production remains `b9e1d330-6150-459f-ab12-f277b7224fbe`, capability
-`2026-10-19.3`. The local candidate is capability `2026-10-19.4`.
-No kDrive uploads or file changes were performed by this investigation.
+Status: **deployed and read-only smoke checks passed**. Cloudflare Free is unchanged.
+Production is `4d0cb91f-8ad2-4d34-93e5-601af407a224`, capability
+`2026-10-19.4`, deployed from commit `ed9eb25` on October 19 at approximately
+22:20 UTC (18:20 EDT). No kDrive uploads or file changes were performed.
 
 ## What the eight events mean
 
@@ -31,7 +31,7 @@ This is evidence of internal RPC lifetime/cleanup accounting after successful
 HTTP delivery, not evidence that those reproduced reads failed. It does not
 prove the outcome of each of the original eight aggregate events.
 
-The deployed bridge passes `Request` and `Response` objects through RPC. Their
+The previous `.3` bridge passed `Request` and `Response` objects through RPC. Their
 bodies use transferable stream capabilities. Cloudflare documents that an RPC
 with capabilities may outlive its method return, and a Worker caller is
 considered disconnected when its execution context ends. See
@@ -39,7 +39,8 @@ considered disconnected when its execution context ends. See
 That is the supported explanation for the observed successful-response/canceled-
 RPC pairing. Ordinary local workerd tail tests report `ok` for both old and new
 bridges, so elimination of the production metric remains an edge verification
-gate, not a locally proven claim.
+gate, not a locally proven claim. The post-deployment observations below now
+provide a bounded edge check.
 
 ## Confirmed SDK session defects
 
@@ -51,7 +52,7 @@ pending request left its HTTP promise unresolved. These behaviors match
 The installed root SDK 1.30.0 also contains the missing JSON cleanup; upgrading
 that package alone would not fix this path.
 
-## Local changes
+## Released changes
 
 - The Worker/DO boundary now passes bounded byte arrays, status and protocol
   headers. It finishes reading the JSON response inside the DO before returning
@@ -93,12 +94,43 @@ that package alone would not fix this path.
 - Both TypeScript checks and the root build passed. Targeted root diagnostics
   and quota tests also passed.
 
-## Deployment gate
+## Deployment and live verification
 
-No deploy, version upload, plan change or production configuration change was
-performed. The scheduled 20:05 EDT post-reset check must continue to expect the
-already deployed `.3` revision, not this local `.4` candidate. A later authorized
-release should compare a bounded read-only sequence in both Worker and DO
-metrics/tails: successful status/browsing, zero session writes, and whether the
-RPC disconnect labels disappear. Report any genuine interrupted operation
-separately; do not suppress or reclassify all disconnects as harmless.
+The user authorized commit, push, CI verification, deployment and read-only
+production checks. Commit `ed9eb25` passed both Linux and macOS jobs in
+[CI run 39333806765](https://github.com/mxpf/kdrive-connector/actions/runs/39333806765)
+before deployment. The Wrangler dry run passed, followed by a successful normal
+deployment with the existing Free-compatible bindings and configuration.
+
+At approximately 22:21 UTC, the connected ChatGPT tools returned:
+
+- Connection status: `connected: true`, build
+  `4d0cb91f-8ad2-4d34-93e5-601af407a224`, capability `2026-10-19.4`.
+- Directory browsing: `/Private`, limit 100, 13 items, no continuation page.
+- Transport diagnostics: JSON, memory-only sessions, no response replay.
+
+A 90-second sanitized live tail beginning 22:21:20 UTC captured 25 events,
+all on the new build. All nine `handleMcpRequest` RPC events ended `ok`, with
+**zero canceled/disconnected RPCs and zero exceptions**. The two requested
+tool completions were successful (connection status 302 ms; directory listing
+865 ms). Unlike the previous `.3` trace, successful HTTP JSON responses were
+paired with successful internal RPC outcomes. The tail also contains client
+initialization/protocol traffic with HTTP 400/405; these had no runtime
+exceptions and did not prevent either requested tool from succeeding. We did
+not retain request bodies to diagnose each protocol probe.
+
+A read-only GraphQL query filtered to 22:21–22:23 UTC returned a nonempty but
+smaller aggregate sample: one successful DO RPC, zero DO errors/disconnects,
+five Worker invocations, zero Worker errors/client disconnects, and zero MCP
+namespace rows read/written. Both invocation datasets identify the new build.
+These counters are subject to ingestion delay and sampling; they do not replace
+the nine directly observed RPC outcomes or represent a billing reconciliation.
+The measured zero-write namespace result is separate from the connector's
+static `session_sql_writes: 0` diagnostic. This short window confirms the
+observed symptom is resolved for these checks, not a guarantee of zero future
+disconnects under all traffic.
+
+The quota reset is still at 00:00 UTC October 20 (20:00 EDT October 19).
+The existing 20:05 EDT post-reset verification should now expect this `.4`
+production version. This deployment check is pre-reset, not post-reset
+acceptance. No authentication, plan or kDrive file changes were made.
