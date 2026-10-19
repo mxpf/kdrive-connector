@@ -14,9 +14,37 @@ other remote MCP clients.
 - The Infomaniak API token and drive ID are Cloudflare Worker secrets.
 - Public tools accept paths and filenames; file IDs, folder IDs, and ETags stay server-side.
 - Tools use MCP read/write and destructive annotations for one native host approval per write.
-- Rename, move, overwrite, and trash require short-lived, one-use signed operation tokens stored in the MCP session's Durable Object database.
+- Rename, move, overwrite, and trash require short-lived, one-use signed operation tokens stored in a separate Durable Object scoped to the authenticated owner and drive.
 - Open in kDrive results use expiring signed redirect links and an inline MCP Apps result card, so tool output does not expose internal IDs or create public shares.
 - Permanent deletion is not exposed.
+
+## Sessions and Free quota recovery
+
+Capability revision `2026-10-19.3` uses JSON Streamable HTTP responses and
+memory-only MCP sessions. Initialization, discovery, status and directory reads
+perform no session SQL/KV writes. The transport no longer uses the Agents
+WebSocket bridge, response replay or standalone SSE streams; authenticated
+`GET /mcp`, including `Last-Event-ID` resumptions, returns 405. OAuth still runs
+first and unauthenticated requests return 401 with a Bearer challenge.
+
+Session IDs are signed, owner-bound and expire after 12 hours. Deployment,
+eviction or explicit termination can end a session sooner. A stale session
+returns 404: initialize once, then retry a read. Never automatically repeat a
+file-changing operation after an ambiguous result. Old Agents session IDs also
+return 404. OCR jobs remain in session memory with bounded `waitUntil` lifetime;
+losing a session never restarts inference automatically.
+
+A best-effort, per-Worker-isolate guard allows 30 new sessions per minute and
+returns 429 with `Retry-After` above that limit. Existing sessions remain usable.
+This is not an account-wide rate limit. Confirmation nonces and verified binary
+digests retain their separate durable stores and existing safeguards.
+
+Recognized Durable Objects Free row-read/write quota errors return
+`CLOUDFLARE_QUOTA_EXCEEDED`, a trace ID, the next UTC-midnight reset time,
+`retry_after_seconds` and `requires_reauthentication: false`. Tool calls return
+an MCP error result; initialization returns HTTP 503 with `Retry-After`.
+Reconnecting cannot replenish a daily quota. See the
+[incident and release evidence](../docs/evidence/work-mode-quota-2026-10-19.md).
 
 ## Deploy
 

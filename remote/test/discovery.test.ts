@@ -1,13 +1,11 @@
 import { createExecutionContext, env, SELF } from "cloudflare:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { KDriveMCP } from "../src/index";
-import { withoutStandaloneNotifications } from "../src/mcp-transport";
 
-it.each([false, true])("discovers all tools and resources with notification mitigation=%s", async (mitigated) => {
-  const original = KDriveMCP.serve("/mcp");
-  const handler = mitigated ? withoutStandaloneNotifications(original) : original;
+it("discovers all tools and resources over the memory-only JSON transport", async () => {
+  const handler = KDriveMCP.serve("/mcp");
   const client = new Client({ name: "local-discovery-regression", version: "1.0.0" });
   let getRequests = 0;
   const transport = new StreamableHTTPClientTransport(new URL("https://local.test/mcp"), {
@@ -52,22 +50,7 @@ it.each([false, true])("discovers all tools and resources with notification miti
   }
 }, 15000);
 
-it("declines only standalone GET and preserves POST, DELETE and resume requests", async () => {
-  const fetch = vi.fn(async () => new Response("delegated"));
-  const handler = withoutStandaloneNotifications({ fetch });
-  const ctx = createExecutionContext();
-  const idle = await handler.fetch(new Request("https://local.test/mcp"), env, ctx);
-  expect(idle.status).toBe(405);
-  expect(idle.headers.get("allow")).toBe("POST, DELETE");
-  expect(fetch).not.toHaveBeenCalled();
-  for (const init of [{ method: "POST" }, { method: "DELETE" }, { headers: { "last-event-id": "resume-event" } }]) {
-    const response = await handler.fetch(new Request("https://local.test/mcp", init), env, ctx);
-    expect(await response.text()).toBe("delegated");
-  }
-  expect(fetch).toHaveBeenCalledTimes(3);
-});
-
-it("keeps OAuth in front of the standalone GET mitigation", async () => {
+it("keeps OAuth in front of the JSON transport", async () => {
   const response = await SELF.fetch("https://local.test/mcp", {
     headers: { accept: "text/event-stream" },
   });

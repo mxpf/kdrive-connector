@@ -63,7 +63,7 @@ transport change against both notification and POST response delivery. A 405
 control in the test client is not a production fix. Do not change authentication
 or redeploy merely to refresh metadata.
 
-## Narrow mitigation
+## Historical narrow mitigation (superseded October 19)
 
 The local Worker integration test passes both with and without the mitigation;
 it does not reproduce the edge/network timeout. Further live tests with explicit
@@ -94,3 +94,13 @@ and zero templates each time. An unauthenticated `/mcp` request still returned
 401. All 54 root tests and eight Worker tests passed, as did both type checks
 and the deployment dry run. This verifies the mitigation on the direct SDK
 client, not yet on the user's Inspector UI or ChatGPT's registered catalog.
+
+## October 19 replacement
+
+Capability revision `2026-10-19.3` replaces the historical wrapper and Agents
+session transport with memory-only JSON responses. All authenticated GET
+streams are declined, including resumptions; POST and DELETE use the standard
+MCP SDK transport. This removes the session database writes and response-stream
+bridge implicated in the October 19 quota incident. The old wrapper is removed.
+See [current session behavior](../remote/README.md#sessions-and-free-quota-recovery)
+and [incident evidence](evidence/work-mode-quota-2026-10-19.md).

@@ -1,6 +1,7 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpAgent } from "agents/mcp";
+import { DurableObject } from "cloudflare:workers";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { AppConfig } from "../../src/config.js";
 import { KDriveClient } from "../../src/kdrive-client.js";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "../../src/kdrive-instructions.js";
@@ -9,7 +10,7 @@ import { createOpenPayload, signKDrivePayload } from "../../src/operation-token.
 import { GitHubHandler } from "./github-handler";
 import { registerKDriveTools } from "./kdrive-tools";
 import type { Props } from "./utils";
-import { withoutStandaloneNotifications } from "./mcp-transport";
+import { createMcpHandler, sessionNotFound } from "./mcp-session";
 import { CONNECTOR_VERSION, connectorDiagnostics } from "../../src/connector-diagnostics.js";
 export { KDriveOperationNonceStore } from "./operation-nonce-store";
 export { KDriveBinaryDigestStore } from "./binary-digest-store";
@@ -26,7 +27,32 @@ function positiveInteger(value: string, name: string): number {
 	return parsed;
 }
 
-export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
+export class KDriveMCP extends DurableObject<Env> {
+	private props?: Props;
+	private transport?: WebStandardStreamableHTTPServerTransport;
+	private ready?: Promise<void>;
+	private closed = false;
+
+	static serve(_path: string) { return createMcpHandler(); }
+
+	async handleMcpRequest(request: Request, props: Props, sessionId: string): Promise<Response> {
+		if (typeof props?.login !== "string" || props.login.toLowerCase() !== this.env.ALLOWED_GITHUB_LOGIN.toLowerCase()) {
+			return new Response("Unauthorized account", { status: 403 });
+		}
+		if (this.closed || (!this.ready && request.headers.has("mcp-session-id"))) return sessionNotFound();
+		if (!this.ready) {
+			this.props = props;
+			this.transport = new WebStandardStreamableHTTPServerTransport({
+				sessionIdGenerator: () => sessionId, enableJsonResponse: true,
+				onsessionclosed: () => { this.closed = true; },
+			});
+			this.ready = this.init().then(() => this.server.connect(this.transport!));
+		}
+		await this.ready;
+		const response = await this.transport!.handleRequest(request);
+		response.headers.set("Cache-Control", "no-store");
+		return response;
+	}
 	server = new McpServer(
 		{ name: "kdrive-connector", version: CONNECTOR_VERSION },
 		{ instructions: KDRIVE_SERVER_INSTRUCTIONS },
@@ -94,7 +120,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 				const drive = await client.getDrive(driveId);
 				return {
 					connected: true,
-					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, pdfOcr: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI), digestCacheScope: "authenticated_owner_drive",
+					connector: connectorDiagnostics({ memoryOnlyMcp: true, buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, pdfOcr: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI), digestCacheScope: "authenticated_owner_drive",
 						pdfOcrJobs: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI),
 						maxReadBytes, maxUploadBytes, binarySourceHosts, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
 					authentication: "OAuth-protected remote connector",
@@ -113,7 +139,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 }
 
 export default new OAuthProvider({
-	apiHandler: withoutStandaloneNotifications(KDriveMCP.serve("/mcp")),
+	apiHandler: KDriveMCP.serve("/mcp"),
 	apiRoute: "/mcp",
 	authorizeEndpoint: "/authorize",
 	clientRegistrationEndpoint: "/register",

@@ -1,3 +1,4 @@
+import { quotaErrorContent } from "./quota-errors.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BINARY_MAX_BYTES, BINARY_TIMEOUT_MS, BinaryTransferError, fetchBinarySource, hashBinary, sourceSize, type BinaryExportReference } from "./binary-transport.js";
@@ -46,6 +47,8 @@ export function registerBinaryTools(server: Pick<McpServer, "registerTool">, cli
       trace.complete(true);
       return { structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     } catch (error) {
+      const quota = quotaErrorContent(error, trace.traceId);
+      if (quota) { trace.complete(false, "CLOUDFLARE_QUOTA_EXCEEDED"); return quota; }
       const code = binaryErrorCode(error);
       trace.complete(false, code);
       // Hosts may normalize error_code to INVALID_ARGUMENT. Preserve the

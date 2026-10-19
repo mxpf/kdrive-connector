@@ -452,3 +452,17 @@ The October 12 reliability and compact-results update passed 157 root tests, 21
 Worker tests, both type checks, and the root build locally. It adds a Node 24
 Linux/macOS CI matrix. The offline readiness check reports missing local
 credentials on Yantra; no new live upload or deployment was performed.
+
+### Session reliability and Free quota errors
+
+Remote capability revision `2026-10-19.3` uses JSON responses and signed,
+owner-bound sessions held in memory, with no SQL/KV writes for session setup or
+discovery. It declines SSE/resumption streams and limits rapid initialization
+per Worker isolate. Existing file-operation confirmation tokens remain durable.
+Expired/evicted sessions return 404; reconnect once and retry reads, but check
+the outcome before repeating any file change. OCR jobs are not replayed.
+
+A recognized Cloudflare Free storage quota failure reports
+`CLOUDFLARE_QUOTA_EXCEEDED`, a trace ID and UTC reset time instead of a generic
+internal error. It explicitly says reauthentication is not required. See
+[session behavior and recovery](remote/README.md#sessions-and-free-quota-recovery).

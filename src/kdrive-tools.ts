@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { quotaErrorContent } from "./quota-errors.js";
 import { TextPreviewUnavailableError } from "./errors.js";
 import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -282,7 +283,9 @@ function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {
   };
 }
 
-function errorContent(error: unknown) {
+function errorContent(error: unknown, traceId?: string) {
+  const quota = quotaErrorContent(error, traceId);
+  if (quota) return quota;
   if (error instanceof TextPreviewUnavailableError) {
     const result = { error_code: error.code, message: error.message, next_tool: error.nextTool };
     return { isError: true, structuredContent: result, content: [{ type: "text" as const, text: JSON.stringify(result) }] };
@@ -316,7 +319,7 @@ function tool<T>(
       ok: false,
       ...operationalErrorFields(error),
     });
-    return errorContent(error);
+    return errorContent(error, traceId);
   });
 }
 

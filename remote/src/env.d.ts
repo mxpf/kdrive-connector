@@ -1,4 +1,4 @@
-interface Env {
+interface KDriveSecretEnv {
 	AI?: import("../../src/pdf-ocr.js").OcrAiBinding;
 	OAUTH_PROVIDER: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
 	GITHUB_CLIENT_ID: string;
@@ -12,3 +12,6 @@ declare module "*.wasm" {
 	const module: WebAssembly.Module;
 	export default module;
 }
+
+interface Env extends KDriveSecretEnv {}
+declare namespace Cloudflare { interface Env extends KDriveSecretEnv {} }

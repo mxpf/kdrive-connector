@@ -5,12 +5,12 @@ import { DEFAULT_BINARY_SOURCE_HOSTS } from "./binary-source-hosts.js";
 import { PDF_JOB_LIMITS } from "./pdf-jobs.js";
 
 export const CONNECTOR_VERSION = "0.3.1";
-export const CAPABILITY_REVISION = "2026-10-19.2";
+export const CAPABILITY_REVISION = "2026-10-19.3";
 
 // A deployment ID identifies the actual running Worker, not the client's catalog.
 // Local builds deliberately report unknown rather than inventing a Git revision.
 export function connectorDiagnostics(options: {
-  buildId?: string; binaryExport: boolean; maxReadBytes: number; pdfOcr?: boolean; pdfOcrJobs?: boolean;
+  memoryOnlyMcp?: boolean; buildId?: string; binaryExport: boolean; maxReadBytes: number; pdfOcr?: boolean; pdfOcrJobs?: boolean;
   maxUploadBytes: number; maxBinaryBytes?: number;
   binarySourceHosts?: readonly string[];
   digestCacheScope?: "authenticated_registration" | "authenticated_owner_drive";
@@ -19,6 +19,7 @@ export function connectorDiagnostics(options: {
     version: CONNECTOR_VERSION,
     build_id: options.buildId ?? "unknown-local-build",
     capability_revision: CAPABILITY_REVISION,
+    ...(options.memoryOnlyMcp ? { transport: { responses: "json", session_storage: "memory", session_sql_writes: 0, response_replay: false, session_ttl_ms: 43_200_000, initialization_burst_limit: { requests: 30, window_ms: 60_000, scope: "worker_isolate" } } } : {}),
     capabilities: { binary_export: options.binaryExport, native_file_upload: true, https_upload: true, range_download: false, pdf_text_extraction: true, pdf_form_values: true, pdf_ocr: options.pdfOcr ?? false, pdf_ocr_jobs: Boolean(options.pdfOcr && options.pdfOcrJobs) },
     binary_source_policy: { revision: "2026-10-19.1", matching: "exact_https_hosts", redirects_revalidated: true,
       trusted_hosts: [...(options.binarySourceHosts ?? DEFAULT_BINARY_SOURCE_HOSTS)], authoritative_error_field: "binary_error_code" },
