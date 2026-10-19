@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-14T04:19:47.248Z",
+  "syntheticOnly": true,
+  "liveBinding": true,
+  "deploymentPerformed": false,
+  "requests": [
+    {
+      "wallMs": 1517,
+      "status": "pending",
+      "phase": "inference"
+    },
+    {
+      "wallMs": 10009,
+      "status": "pending",
+      "phase": "inference"
+    },
+    {
+      "wallMs": 10007,
+      "status": "pending",
+      "phase": "inference"
+    },
+    {
+      "wallMs": 10008,
+      "status": "pending",
+      "phase": "inference"
+    },
+    {
+      "wallMs": 10006,
+      "status": "pending",
+      "phase": "inference"
+    },
+    {
+      "wallMs": 2991,
+      "status": "complete"
+    }
+  ],
+  "fixtureSha256": "f472a8b1769897c1e1cb2a1a2e84f53eb1aad0f0c75a3d2cfbf9a6f115cba581",
+  "totalWallMs": 44541,
+  "telemetry": {
+    "downloads": 1,
+    "calls": 1,
+    "aborted": false,
+    "usage": {
+      "prompt_tokens": 1849,
+      "completion_tokens": 2117,
+      "total_tokens": 3966,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "neurons": 691.4954833984375
+    }
+  },
+  "outputChars": 4757,
+  "missingText": [],
+  "status": "passed"
+}

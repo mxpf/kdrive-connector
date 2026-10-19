@@ -97,11 +97,11 @@ export function validateSourceUrl(value: string, trustedHosts: readonly string[]
   }
   if (!trustedHosts.includes(host)) {
     // No URL path, query, credentials, or user-supplied file ID in diagnostics.
-    // Report only a bounded regional OpenAI hostname, never arbitrary host data.
+    // Report only bounded provider hostnames, never arbitrary host data.
     // This is diagnostic evidence, not automatic permission to fetch it.
-    const diagnosticHost = /^sdmnt[a-z0-9-]{1,48}\.oaiusercontent\.com$/.test(host) ? ` Rejected hostname: ${host}.` : "";
+    const diagnosticHost = /^(?:sdmnt[a-z0-9-]{1,48}\.oaiusercontent\.com|(?:ia|dn)[0-9]{6}\.(?:us|eu)\.archive\.org)$/.test(host) ? ` Rejected hostname: ${host}.` : "";
     const provider = host.endsWith(".oaiusercontent.com") ? "OpenAI file host" : "source host";
-    throw new BinaryTransferError(`Binary ${provider} is not on the exact trusted-host allowlist.${diagnosticHost} The file adapter supplied an HTTPS URL, but source policy rejected it. Ask the administrator to verify its hostname privately; do not construct another URL or retry with a local path.`, "SOURCE_HOST_DENIED");
+    throw new BinaryTransferError(`Binary ${provider} is not on the exact trusted-host allowlist.${diagnosticHost} The supplied HTTPS URL was rejected by source policy. Ask the administrator to verify its hostname privately; do not construct another URL or retry with a local path.`, "SOURCE_HOST_DENIED");
   }
   return url;
 }

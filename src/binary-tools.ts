@@ -6,6 +6,8 @@ import { splitKDrivePath } from "./kdrive-client.js";
 import { validateName } from "./safety.js";
 import { binaryErrorCode, binaryTrace } from "./binary-diagnostics.js";
 import { BinaryDigestCache, assertVerifiedDigest, withinDigestCacheDeadline, type BinaryDigestStore, type Digest } from "./binary-digest-cache.js";
+import { DEFAULT_BINARY_SOURCE_HOSTS } from "./binary-source-hosts.js";
+export { DEFAULT_BINARY_SOURCE_HOSTS } from "./binary-source-hosts.js";
 
 export interface BinaryToolConfig {
   // Trusted server configuration, never an MCP argument. Remote stores must be
@@ -17,10 +19,6 @@ export interface BinaryToolConfig {
   buildBinaryExport?: (file: KDriveFile, versionId: number | string, digest: { size_bytes: number; sha256: string; trace_id?: string }) => Promise<BinaryExportReference>;
   buildOpenUrl: (file: KDriveFile) => Promise<string> | string;
 }
-
-// Exact hosts observed in host-managed transfers (2026-09-29 and 2026-10-09).
-// Do not broaden this to all regional/shared-storage subdomains.
-export const DEFAULT_BINARY_SOURCE_HOSTS = ["files.oaiusercontent.com", "sandbox.openai.com", "sdmntprcentralus.oaiusercontent.com", "sdmntprnorthcentralus.oaiusercontent.com", "sdmntprsoutheastus3.oaiusercontent.com", "sdmntpreastus2.oaiusercontent.com", "oaisdmntprnorthcentralus.blob.core.windows.net", "sdmntprbrazilsouth.oaiusercontent.com", "sdmntprsouthcentralus.oaiusercontent.com", "sdmntprwestus.oaiusercontent.com", "sdmntprnortheu.oaiusercontent.com"] as const;
 
 export async function uploadedBinaryResult(result: { file: KDriveFile; size_bytes: number; sha256: string }, path: string, buildOpenUrl: BinaryToolConfig["buildOpenUrl"]) {
   let openUrl: string | undefined;

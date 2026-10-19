@@ -30,6 +30,7 @@ import { validateName } from "./safety.js";
 import { registerBinaryTools, type BinaryToolConfig } from "./binary-tools.js";
 import { registerPdfTools } from "./pdf-tools.js";
 import type { PdfOcrRuntime } from "./pdf-ocr.js";
+import type { PdfJobOptions } from "./pdf-jobs.js";
 
 const DEFAULT_OPERATION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -197,6 +198,7 @@ const KDRIVE_RESULTS_UI = `
 
 export interface KDriveToolConfig extends BinaryToolConfig {
   pdfOcrRuntime?: PdfOcrRuntime;
+  pdfJobOptions?: PdfJobOptions;
   driveId: number;
   maxReadBytes: number;
   maxUploadBytes: number;
@@ -515,7 +517,7 @@ export function registerKDriveTools(
   config: KDriveToolConfig,
 ): void {
   registerBinaryTools(server, client, config);
-  registerPdfTools(server, client, config.driveId, config.pdfOcrRuntime);
+  registerPdfTools(server, client, config.driveId, config.pdfOcrRuntime, config.pdfJobOptions);
   const resourceServer = server as unknown as {
     registerResource: (
       name: string,

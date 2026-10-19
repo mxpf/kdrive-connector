@@ -28,11 +28,12 @@ const server = new McpServer(
   { instructions: KDRIVE_SERVER_INSTRUCTIONS },
 );
 
+const binarySourceHosts = process.env.KDRIVE_BINARY_SOURCE_HOSTS?.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
 registerKDriveTools(server, client, {
   driveId,
   maxReadBytes: config.maxReadBytes,
   maxUploadBytes: config.maxUploadBytes,
-  binarySourceHosts: process.env.KDRIVE_BINARY_SOURCE_HOSTS?.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
+  binarySourceHosts,
   operationSecret: generateOperationSecret(),
   nonceStore: new MemoryOperationNonceStore(),
   buildOpenUrl: (file) => `https://ksuite.infomaniak.com/all/kdrive/app/drive/${driveId}/files/${file.id}`,
@@ -42,7 +43,7 @@ registerKDriveTools(server, client, {
     const drive = await client.getDrive(driveId);
     return {
       connected: true,
-      connector: connectorDiagnostics({ binaryExport: false, maxReadBytes: config.maxReadBytes, maxUploadBytes: config.maxUploadBytes }),
+      connector: connectorDiagnostics({ binaryExport: false, binarySourceHosts, maxReadBytes: config.maxReadBytes, maxUploadBytes: config.maxUploadBytes }),
       authentication,
       drive: {
         name: drive.name,

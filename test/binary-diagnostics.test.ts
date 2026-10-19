@@ -18,6 +18,13 @@ test("diagnostics distinguish builds, capabilities and effective limits", () => 
   assert.equal(remote.capabilities.range_download, false);
   assert.equal(remote.capabilities.pdf_text_extraction, true);
   assert.equal(remote.capabilities.pdf_ocr, false);
+  assert.equal(remote.capabilities.pdf_ocr_jobs, false);
+  assert.equal(remote.limits.pdf_ocr_job, undefined);
+  const jobs = connectorDiagnostics({ binaryExport: true, maxReadBytes: 1, maxUploadBytes: 2, pdfOcr: true, pdfOcrJobs: true });
+  assert.equal(jobs.capabilities.pdf_ocr_jobs, true);
+  assert.equal(jobs.limits.pdf_ocr_job?.timeoutMs, 180_000);
+  assert.equal(jobs.limits.pdf_ocr_job?.pollWaitMs, 10_000);
+  assert.equal(connectorDiagnostics({ binaryExport: true, maxReadBytes: 1, maxUploadBytes: 2, pdfOcrJobs: true }).capabilities.pdf_ocr_jobs, false);
   assert.equal(remote.limits.pdf.bytes, 5 * 1024 * 1024);
   assert.deepEqual(remote.optimizations.binary_digest_cache, { enabled: true, max_entries: 128, ttl_ms: 600000, scope: "authenticated_registration" });
   assert.ok(remote.capability_revision);

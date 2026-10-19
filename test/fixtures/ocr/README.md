@@ -77,3 +77,25 @@ text/choice fields must remain consistent stored values. For `forms-stale`,
 pypdf independently checks raw `/V`, while the connector warns that its checkbox
 states are normalized from `/AS`. A successful visual transcription must follow
 the rendered marks, not substitute the raw values or parser output.
+
+## Dense-page timeout regression
+
+`generate_dense.py /absolute/output/directory` creates a separate image-only
+page with 48 fabricated rows and over 4,700 expected characters. It accepts no
+source PDF and does not change the original 15-case manifest. This covers a
+longer transcription than the short recognition fixtures.
+
+From `remote/`, the explicitly opted-in real-binding check is:
+
+```sh
+KDRIVE_TEST_PYTHON=/path/to/python node scripts/validate-ocr-jobs.mjs \
+  --live --free-plan-verified --account YOUR_ACCOUNT_ID --report /path/to/report.json
+```
+
+Verify Workers Free before using that flag. It generates the page locally,
+uses a temporary AI development proxy, makes one model call, polls the local
+Durable Object, and checks every row and the file checksum. It does not deploy,
+access kDrive, upload a PDF or retry inference. Reports contain synthetic-only
+metrics and any missing synthetic lines. CI uses mocked inference instead;
+`remote/test-http/pdf-jobs.test.mjs` waits over 45 seconds between independent
+requests and checks timeout cancellation, session isolation and recovery.

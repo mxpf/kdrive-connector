@@ -6,8 +6,9 @@ import { validOcrImageOptions, type PdfOcrImageOptions } from "./pdf-ocr-image.j
 export const PDF_LIMITS = { bytes: 5 * 1024 * 1024, documentPages: 200, pagesPerCall: 5, characters: 100_000, fieldsPerCall: 500, timeoutMs: 20_000, ocrTimeoutMs: 45_000 } as const;
 
 export class PdfReadError extends Error {
-  constructor(readonly code: string, message: string) { super(message); this.name = "PdfReadError"; }
+  constructor(readonly code: string, message: string, readonly phase?: PdfReadPhase) { super(message); this.name = "PdfReadError"; }
 }
+export type PdfReadPhase = "resolve" | "download" | "integrity" | "extract" | "render" | "inference";
 
 export interface PdfReadOptions extends PdfOcrImageOptions { startPage?: number; pageCount?: number; password?: string; ocr?: boolean }
 

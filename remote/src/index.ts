@@ -40,6 +40,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		const driveId = positiveInteger(this.env.KDRIVE_DRIVE_ID, "KDRIVE_DRIVE_ID");
 		const maxReadBytes = positiveInteger(this.env.KDRIVE_MAX_READ_BYTES, "KDRIVE_MAX_READ_BYTES");
 		const maxUploadBytes = positiveInteger(this.env.KDRIVE_MAX_UPLOAD_BYTES, "KDRIVE_MAX_UPLOAD_BYTES");
+		const binarySourceHosts = this.env.KDRIVE_BINARY_SOURCE_HOSTS.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
 		const config: AppConfig = {
 			apiBaseUrl: "https://api.infomaniak.com",
 			authorizeUrl: "",
@@ -66,6 +67,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 		const digestStore = this.env.KDRIVE_BINARY_DIGESTS.getByName(digestStoreName(subject, driveId));
 
 		registerKDriveTools(this.server, client, {
+			pdfJobOptions: { keepAlive: promise => this.ctx.waitUntil(promise) },
 			pdfOcrRuntime: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && this.env.AI ? {
 				provider: cloudflareOcrProvider(this.env.AI),
 				render: (bytes, page, password, options) => renderPdfOcrPage(bytes, page, password, options, pdfiumWasm),
@@ -76,7 +78,7 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 			maxUploadBytes,
 			operationSecret: this.env.KDRIVE_OPERATION_SECRET,
 			maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES"),
-			binarySourceHosts: this.env.KDRIVE_BINARY_SOURCE_HOSTS.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
+			binarySourceHosts,
 			buildBinaryExport: (file, versionId, digest) => createBinaryExport(this.env.KDRIVE_OPERATION_SECRET, connectorBaseUrl, subject, driveId, file, versionId, digest),
 			nonceStore,
 			buildOpenUrl: async (file) => {
@@ -93,7 +95,8 @@ export class KDriveMCP extends McpAgent<Env, Record<string, never>, Props> {
 				return {
 					connected: true,
 					connector: connectorDiagnostics({ buildId: this.env.KDRIVE_WORKER_VERSION?.id ?? "unknown-worker-build", binaryExport: true, pdfOcr: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI), digestCacheScope: "authenticated_owner_drive",
-						maxReadBytes, maxUploadBytes, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
+						pdfOcrJobs: String(this.env.KDRIVE_PDF_OCR_ENABLED) === "true" && Boolean(this.env.AI),
+						maxReadBytes, maxUploadBytes, binarySourceHosts, maxBinaryBytes: positiveInteger(this.env.KDRIVE_MAX_BINARY_BYTES, "KDRIVE_MAX_BINARY_BYTES") }),
 					authentication: "OAuth-protected remote connector",
 					drive: {
 						name: drive.name,

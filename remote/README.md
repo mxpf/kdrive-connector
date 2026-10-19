@@ -103,6 +103,15 @@ in the authorized October 13 deployment. Parsed checkbox states carry explicit
 source/review warnings. Rotation and region selection preserve scope in results.
 The deployed configuration has an `AI` binding and `KDRIVE_PDF_OCR_ENABLED="true"`; each call still defaults to `ocr=false`. Workers Free is unchanged. Unit tests disable remote bindings and OCR, and require no Cloudflare credentials. See [design and test evidence](../docs/pdf-extraction.md).
 
+Local capability revision `2026-10-14.1` adds bounded OCR jobs and is **not
+deployed**. Slow reads return a job ID; `kdrive_get_pdf_ocr_result` polls the same
+job in the authenticated MCP session. `DurableObjectState.waitUntil` keeps the
+work alive after the initial reply, up to the connector's three-minute deadline.
+Results expire from memory three minutes after completion; no storage migration,
+new binding or plan change is required. Refresh the ChatGPT tool catalog after
+a future authorized deployment so the polling tool is available. Check
+`pdf_ocr_jobs=true` and `limits.pdf_ocr_job` in connection diagnostics.
+
 The remote server includes `kdrive_export_file`, `kdrive_upload_file_ref`, and
 `kdrive_upload_from_url`. The `/binary/:token` endpoint serves raw, version-pinned
 bytes via a five-minute signed bearer link; `/open/:token` remains a human-facing

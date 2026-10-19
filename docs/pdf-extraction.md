@@ -8,6 +8,12 @@ failures. Explicit rotation correction, margin removal and region scope remain
 unchanged. See the latest checkbox evidence below. No Adobe file import, export URL, manual download or re-upload is needed by this
 reader. This does not repair the separate Adobe attachment bridge.
 
+Timeout follow-up (2026-10-14, local revision `2026-10-14.1`, **not deployed**):
+remote OCR now runs as a bounded job and exposes `kdrive_get_pdf_ocr_result`.
+Dense-page inference can exceed the old synchronous 45-second deadline. The
+new initial response and polling calls finish promptly while one inference
+continues for up to three minutes. See the [investigation and validation record](evidence/ocr-timeout-2026-10-14.md).
+
 Follow-up (not currently deployed; production trial rolled back): entirely opaque-white rendered pages/regions
 now return `ocr.text: ""`, `status: "no_text_detected"`, `source: "pdf_render"`
 and `model: null` without calling Workers AI. Previously the model could return
@@ -108,14 +114,29 @@ at most one model call per requested page/region, with no automatic orientation 
 tilings or retries. A later region call re-downloads the source; carry
 `expectedSha256` to ensure it is the same version. OCR options require `ocr=true`.
 
-Ordinary text/form reads have a 20-second deadline; OCR reads have a 45-second
-wall-clock deadline to accommodate observed inference latency. A live request
-exceeded the former 20-second limit, and another exceeded 45 seconds; both are
-retained as failures. The final suite passed without automatic retries. This
-changes the bounded asynchronous wait, not the Worker CPU quota. AI inference receives an abort
-signal and a bounded wait; cancellation cannot guarantee upstream computation
-has stopped. Synchronous parsing/rendering cannot be interrupted by a timer.
-One PDF read per isolate is admitted; other attempts receive `PDF_BUSY`.
+Ordinary text/form reads retain a 20-second deadline. The deployed synchronous
+OCR path and direct internal reader retain their 45-second deadline. The local
+remote-job implementation uses a 180-second total deadline covering resolution,
+download, hashing, parsing, rendering and inference. The initial call waits up
+to 1.5 seconds before returning `status: "pending"`, `jobId`, `phase`,
+`expiresAt`, and polling guidance. Each `kdrive_get_pdf_ocr_result({jobId})` call
+waits up to 10 seconds and returns another pending result, the normal verified
+PDF result, or a sanitized error. Polling never extends the deadline or repeats
+download/inference. `PDF_TIMEOUT` includes the active phase.
+
+One running job per authenticated MCP session is allowed; the existing
+one-read-per-isolate guard also remains. Completed results are held in session
+memory for three minutes, with at most four retained results. Expiry, eviction
+or session restart returns `PDF_JOB_NOT_FOUND`; it never silently starts new
+inference. A new read after a failure or lost job must be explicit. The existing
+Durable Object uses [waitUntil](https://developers.cloudflare.com/durable-objects/api/state/#waituntil)
+to retain background work across requests. There is no durable document storage,
+new binding or paid queue. These waits consume existing Free request/duration
+allowances and remain subject to platform limits; they do not raise CPU limits.
+AI inference receives an abort signal and a bounded wait; cancellation cannot
+guarantee upstream computation has stopped. Synchronous parsing/rendering
+cannot be interrupted by a timer, so the 1.5/10-second response waits are not
+hard limits while synchronous code occupies the event loop.
 
 Results retain separate sources:
 
@@ -133,8 +154,10 @@ Results retain separate sources:
 - Complete-file byte length/SHA-256, page continuation, form scope and warnings.
 
 The digest identifies the bytes retrieved. Without an independently supplied
-expected digest, it is not external proof of the source hash. Each call
-re-downloads and re-verifies the file; private documents are not cached.
+expected digest, it is not external proof of the source hash. Each new read
+re-downloads and re-verifies the file; a poll retrieves the same job's result.
+Source bytes are not cached; the local job implementation temporarily retains
+the extracted result as described above.
 
 ## Form reliability
 
@@ -179,8 +202,10 @@ set `remoteBindings: false` and disable OCR; extraction/rendering suites use
 mocks and block outbound network. CI needs no Cloudflare credentials and does
 not deploy. The account remains Workers Free.
 
-No document bytes, extracted data or passwords are logged/cached/persisted by
-these modules. OCR sends the **visible page image** to Cloudflare AI: it may
+No document bytes, extracted data or passwords are logged or durably persisted
+by these modules. Bytes/passwords are held only for active processing; completed
+OCR results are temporarily retained in authenticated session memory as above.
+OCR sends the **visible page image** to Cloudflare AI: it may
 contain sensitive document content, though source paths, URLs, filenames and
 password arguments are not included as model parameters. Cloudflare AI data
 policies and host conversation retention apply. All extracted content is
