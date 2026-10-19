@@ -1,7 +1,8 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DurableObject } from "cloudflare:workers";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { JsonMcpTransport } from "./json-mcp-transport";
+import { encodeMcpResponse, type McpRpcRequest, type McpRpcResponse } from "./mcp-rpc";
 import type { AppConfig } from "../../src/config.js";
 import { KDriveClient } from "../../src/kdrive-client.js";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "../../src/kdrive-instructions.js";
@@ -29,21 +30,22 @@ function positiveInteger(value: string, name: string): number {
 
 export class KDriveMCP extends DurableObject<Env> {
 	private props?: Props;
-	private transport?: WebStandardStreamableHTTPServerTransport;
+	private transport?: JsonMcpTransport;
 	private ready?: Promise<void>;
 	private closed = false;
 
 	static serve(_path: string) { return createMcpHandler(); }
 
-	async handleMcpRequest(request: Request, props: Props, sessionId: string): Promise<Response> {
+	async handleMcpRequest(input: McpRpcRequest, props: Props, sessionId: string): Promise<McpRpcResponse> {
+		const request = new Request("https://mcp.internal/mcp", input);
 		if (typeof props?.login !== "string" || props.login.toLowerCase() !== this.env.ALLOWED_GITHUB_LOGIN.toLowerCase()) {
-			return new Response("Unauthorized account", { status: 403 });
+			return encodeMcpResponse(new Response("Unauthorized account", { status: 403 }));
 		}
-		if (this.closed || (!this.ready && request.headers.has("mcp-session-id"))) return sessionNotFound();
+		if (this.closed || (!this.ready && request.headers.has("mcp-session-id"))) return encodeMcpResponse(sessionNotFound());
 		if (!this.ready) {
 			this.props = props;
-			this.transport = new WebStandardStreamableHTTPServerTransport({
-				sessionIdGenerator: () => sessionId, enableJsonResponse: true,
+			this.transport = new JsonMcpTransport({
+				sessionIdGenerator: () => sessionId,
 				onsessionclosed: () => { this.closed = true; },
 			});
 			this.ready = this.init().then(() => this.server.connect(this.transport!));
@@ -51,7 +53,7 @@ export class KDriveMCP extends DurableObject<Env> {
 		await this.ready;
 		const response = await this.transport!.handleRequest(request);
 		response.headers.set("Cache-Control", "no-store");
-		return response;
+		return encodeMcpResponse(response);
 	}
 	server = new McpServer(
 		{ name: "kdrive-connector", version: CONNECTOR_VERSION },

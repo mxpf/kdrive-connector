@@ -2,6 +2,7 @@ import { createExecutionContext, env, runInDurableObject, evictDurableObject, SE
 import { expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { encodeMcpResponse, MAX_MCP_REQUEST_BYTES } from "../src/mcp-rpc";
 import { createMcpHandler, issueSession, validSession } from "../src/mcp-session";
 
 const props = { login: env.ALLOWED_GITHUB_LOGIN, name: null, email: null };
@@ -37,8 +38,10 @@ it("repeated discovery uses JSON, one initialization each, and no session SQL/KV
       keys: (await state.storage.list()).size,
       tables: state.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_cf_%'").toArray(),
       alarm: await state.storage.getAlarm(),
+      responseEntries: (_instance as any).transport._streamMapping.size,
+      requestEntries: (_instance as any).transport._requestToStreamMapping.size,
     }));
-    expect(storage).toEqual({ keys: 0, tables: [], alarm: null });
+    expect(storage).toEqual({ keys: 0, tables: [], alarm: null, responseEntries: 0, requestEntries: 0 });
     await transport.terminateSession(); await client.close();
   }
 }, 30000);
@@ -67,7 +70,7 @@ it("evicted sessions return 404 instead of reconstructing schema or replaying a 
 
 it("caps rapid initialization without durable counters; never blocks established sessions", async () => {
   const handler = createMcpHandler();
-  const invoke = vi.fn(async () => Response.json({ ok: true }));
+  const invoke = vi.fn(async () => encodeMcpResponse(Response.json({ ok: true })));
   const fakeEnv = { ...env, MCP_OBJECT: { getByName: () => ({ handleMcpRequest: invoke }) } } as unknown as Env;
   for (let i = 0; i < 30; i++) expect((await handler.fetch(request(initialize), fakeEnv, context())).status).toBe(200);
   const limited = await handler.fetch(request(initialize), fakeEnv, context());
@@ -111,7 +114,8 @@ it("rejects malformed and oversized requests before session allocation and redac
   for (const body of [[initialize], { ...initialize, params: {} }, { method: "tools/list" }]) {
     expect((await handler.fetch(request(body), fakeEnv, context())).status).toBe(400);
   }
-  const oversized = request({ ...initialize, padding: "x".repeat(4 * 1024 * 1024) });
+  const oversized = request(initialize);
+  oversized.headers.set("content-length", String(MAX_MCP_REQUEST_BYTES + 1));
   expect((await handler.fetch(oversized, fakeEnv, context())).status).toBe(413);
   expect(getByName).not.toHaveBeenCalled();
   getByName.mockReturnValue({ handleMcpRequest: async () => { throw new Error("private-path and secret-token"); } });
@@ -120,4 +124,29 @@ it("rejects malformed and oversized requests before session allocation and redac
   const text = await response.text();
   expect(text).toContain("CONNECTOR_TRANSPORT_ERROR");
   expect(text).not.toMatch(/private-path|secret-token/);
+});
+
+it("passes byte values and protocol headers only, including a supported 10 MiB inline upload", async () => {
+  const input = { jsonrpc: "2.0", id: 3, method: "tools/call", params: {
+    name: "kdrive_upload_file", arguments: { path: "/synthetic.bin", encoding: "base64", content: "A".repeat(Math.ceil(10 * 1024 * 1024 / 3) * 4 - 2) + "==" },
+  } };
+  const token = await issueSession(env.KDRIVE_OPERATION_SECRET, props.login);
+  const req = request(input, token);
+  req.headers.set("authorization", "Bearer synthetic-secret");
+  req.headers.set("cookie", "synthetic-cookie");
+  req.headers.set("mcp-protocol-version", "2025-11-25");
+  const invoke = vi.fn(async (message: any) => {
+    expect(message).not.toBeInstanceOf(Request);
+    expect(message.body).toBeInstanceOf(Uint8Array);
+    expect(Object.keys(message).sort()).toEqual(["body", "headers", "method"]);
+    const headers = new Headers(message.headers);
+    expect(headers.has("authorization")).toBe(false); expect(headers.has("cookie")).toBe(false);
+    expect(headers.get("mcp-protocol-version")).toBe("2025-11-25");
+    const decoded = JSON.parse(new TextDecoder().decode(message.body));
+    expect(decoded.params.arguments.content.length).toBe(input.params.arguments.content.length);
+    return encodeMcpResponse(Response.json({ ok: true }));
+  });
+  const fakeEnv = { ...env, MCP_OBJECT: { getByName: () => ({ handleMcpRequest: invoke }) } } as unknown as Env;
+  expect((await createMcpHandler().fetch(req, fakeEnv, context())).status).toBe(200);
+  expect(invoke).toHaveBeenCalledTimes(1);
 });

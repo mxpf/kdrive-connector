@@ -5,7 +5,7 @@ import { DEFAULT_BINARY_SOURCE_HOSTS } from "./binary-source-hosts.js";
 import { PDF_JOB_LIMITS } from "./pdf-jobs.js";
 
 export const CONNECTOR_VERSION = "0.3.1";
-export const CAPABILITY_REVISION = "2026-10-19.3";
+export const CAPABILITY_REVISION = "2026-10-19.4";
 
 // A deployment ID identifies the actual running Worker, not the client's catalog.
 // Local builds deliberately report unknown rather than inventing a Git revision.

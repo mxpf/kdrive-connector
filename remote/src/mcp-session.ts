@@ -1,9 +1,9 @@
 import { isInitializeRequest, InitializeRequestSchema, JSONRPCMessageSchema } from "@modelcontextprotocol/sdk/types.js";
 import { quotaErrorDetails } from "../../src/quota-errors.js";
 import type { Props } from "./utils";
+import { MAX_MCP_REQUEST_BYTES, readBoundedBody, type McpRpcRequest } from "./mcp-rpc";
 
 const SESSION_MS = 12 * 60 * 60 * 1000;
-const MAX_BODY = 4 * 1024 * 1024;
 const encoder = new TextEncoder();
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("");
 async function sessionKey(secret: string) {
@@ -46,23 +46,19 @@ export function createMcpHandler() {
     try {
       let session = request.headers.get("mcp-session-id");
       if (session && !await validSession(session, env.KDRIVE_OPERATION_SECRET, owner.toLowerCase())) return sessionNotFound();
+      let bytes: Uint8Array | null = null;
       if (request.method === "POST") {
         const accept = request.headers.get("accept") ?? "";
         if (!accept.includes("application/json") || !accept.includes("text/event-stream")) return rpcError(406, "Accept must include application/json and text/event-stream.");
         if (!request.headers.get("content-type")?.includes("application/json")) return rpcError(415, "Content-Type must be application/json.");
-        if (Number(request.headers.get("content-length")) > MAX_BODY) return rpcError(413, "MCP request exceeds 4 MiB.");
-        const reader = request.body?.getReader();
-        const chunks: Uint8Array[] = []; let size = 0;
-        if (reader) try {
-          while (true) { const part = await reader.read(); if (part.done) break;
-            size += part.value.byteLength; if (size > MAX_BODY) { await reader.cancel(); return rpcError(413, "MCP request exceeds 4 MiB."); }
-            chunks.push(part.value);
-          }
-        } finally { reader.releaseLock(); }
-        const bytes = new Uint8Array(size); let offset = 0;
-        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        if (Number(request.headers.get("content-length")) > MAX_MCP_REQUEST_BYTES) return rpcError(413, "MCP request exceeds 16 MiB; use a binary upload reference for larger files.");
+        try { bytes = await readBoundedBody(request.body, MAX_MCP_REQUEST_BYTES); }
+        catch (error) {
+          if (error instanceof RangeError) return rpcError(413, "MCP request exceeds 16 MiB; use a binary upload reference for larger files.");
+          throw error;
+        }
         let body: Record<string, unknown>;
-        try { body = JSON.parse(new TextDecoder().decode(bytes)); }
+        try { body = JSON.parse(new TextDecoder().decode(bytes ?? new Uint8Array())); }
         catch { return rpcError(400, "Invalid JSON."); }
         if (!JSONRPCMessageSchema.safeParse(body).success) return rpcError(400, "Expected one JSON-RPC 2.0 message.");
         id = typeof body.id === "string" || typeof body.id === "number" ? body.id : null;
@@ -81,13 +77,19 @@ export function createMcpHandler() {
           initCount++;
           session = await issueSession(env.KDRIVE_OPERATION_SECRET, owner.toLowerCase());
         } else if (!session) return rpcError(400, "Mcp-Session-Id required. Initialize the connection before calling tools.", id);
-        request = new Request(request.url, { method: "POST", headers: request.headers, body: bytes });
       }
       if (!session) return rpcError(400, "Mcp-Session-Id required.");
-      // RPC cannot serialize a client AbortSignal; forward only protocol data.
-      if (request.method === "DELETE") request = new Request(request.url, { method: "DELETE", headers: request.headers });
+      // OAuth has already checked identity; never forward credentials, URLs,
+      // streams or AbortSignals through the internal RPC boundary.
+      const headers: [string, string][] = [];
+      for (const key of ["content-type", "accept", "mcp-session-id", "mcp-protocol-version"]) {
+        const value = request.headers.get(key);
+        if (value !== null) headers.push([key, value]);
+      }
+      const input: McpRpcRequest = { method: request.method as "POST" | "DELETE", headers, body: bytes };
       const stub = env.MCP_OBJECT.getByName(`json:${owner.toLowerCase()}:${session}`);
-      return await stub.handleMcpRequest(request, props!, session);
+      const result = await stub.handleMcpRequest(input, props!, session);
+      return new Response(result.body, { status: result.status, headers: result.headers });
     } catch (error) {
       const traceId = crypto.randomUUID();
       const quota = quotaErrorDetails(error, traceId);

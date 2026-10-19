@@ -181,3 +181,43 @@ October 20), after the 00:00 UTC quota reset. It will verify
 limit 100, record only sanitized status/count/build information, and inspect
 session write metrics. No folder creation, uploads or original-file changes
 are part of that check. Post-reset acceptance is pending until it actually runs.
+
+## Pre-reset follow-up — October 19, approximately 17:52 EDT
+
+The user requested post-reset results, but the clock was still before the
+20:00 EDT reset. The one-time 20:05 EDT automation remains ACTIVE; no post-reset
+result exists yet. This check must not be labeled post-reset acceptance.
+
+Fresh connected-tool checks both succeeded on the first attempt:
+
+- Connection: `connected: true`, build `b9e1d330-6150-459f-ab12-f277b7224fbe`,
+  capability `2026-10-19.3`, memory-only JSON transport.
+- `/Private`, limit 100: 13 items, no continuation page.
+- Evidence-only commit `f82b5a3` also passed CI (run `39329555158`).
+
+Read-only Cloudflare GraphQL queries used the 21:42–21:52 UTC filter window.
+Available data included 21:45 and 21:50 five-minute buckets:
+
+| Metric | Reported result |
+| --- | ---: |
+| MCP namespace rows written | 0 |
+| MCP namespace rows read | 0 |
+| Worker invocations on the deployed version | 35 |
+| Worker errors | 0 |
+| Worker client disconnects | 0 |
+| DO RPC invocations marked success | 4 |
+| DO RPC invocations marked clientDisconnected | 8 |
+
+The zero-write result is measured namespace telemetry, independently of the
+connector's static transport diagnostic. The Worker-level requests all reported
+success; both user-facing reads also succeeded. The separate DO RPC dataset
+counts eight client-disconnect outcomes as errors. These cannot be equated with
+eight failed user tools or dismissed as harmless without per-request evidence.
+No `scriptThrewException` outcomes appeared in this window. There is no evidence
+of the previous high-volume write churn in this short sample, but the later
+check should continue to compare both datasets. Analytics ingestion/sampling
+means these are observed counters, not a billing reconciliation or a guarantee
+of future behavior.
+
+Cloudflare Free remains unchanged. No deployment, authentication change, upload
+or kDrive file mutation was performed for this follow-up.

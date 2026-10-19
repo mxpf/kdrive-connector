@@ -46,14 +46,19 @@ test('production JSON session transport preserves OCR jobs across separate HTTP 
     plugins:[{name:'wasm-path',setup(b){b.onResolve({filter:/@hyzyla\/pdfium\/pdfium\.wasm$/},()=>({path:'./pdfium.wasm',external:true}));}}],
   });
   let outbound=0;
-  const mf=new Miniflare(convertV4MiniflareOptions({port:0,modules:[
+  const runtime=convertV4MiniflareOptions({port:0,modules:[
     {type:'ESModule',path:'index.mjs',contents:bundle.outputFiles[0].text},
     {type:'CompiledWasm',path:'pdfium.wasm',contents:await readFile(new URL('../../node_modules/@hyzyla/pdfium/dist/pdfium.wasm',import.meta.url))}],
     compatibilityDate:'2026-08-13',compatibilityFlags:['nodejs_compat'],
     durableObjects:{MCP_OBJECT:{className:'SyntheticMcp',useSQLite:true}},
     bindings:{ALLOWED_GITHUB_LOGIN:'synthetic',KDRIVE_OPERATION_SECRET:'synthetic-session-secret'},
     outboundService:()=>{outbound++;return new Response('Unexpected network',{status:502});},
-  }));
+  });
+  runtime.workers[0].config.tailConsumers=[{worker:'rpc-observer'}];
+  runtime.workers.push(convertV4MiniflareOptions({name:'rpc-observer',modules:true,compatibilityDate:'2026-08-13',script:`
+    const traces=[]; export default {tail(events){for(const e of events)if(e.event?.rpcMethod)traces.push({method:e.event.rpcMethod,outcome:e.outcome});},fetch(){return Response.json(traces);}};
+  `}).workers[0]);
+  const mf=new Miniflare(runtime);
   const clients=[];
   try {
     const url=new URL('/mcp',await mf.ready);
@@ -89,5 +94,14 @@ test('production JSON session transport preserves OCR jobs across separate HTTP 
     const stale=await fetch(url,{method:'POST',headers:{'content-type':'application/json',accept:'application/json, text/event-stream','mcp-session-id':session},
       body:JSON.stringify({jsonrpc:'2.0',id:90,method:'tools/list'})});
     assert.equal(stale.status,404);
+    const observer=await mf.getWorker('rpc-observer');
+    let traces=[];
+    // Tail delivery is asynchronous; wait within a fixed local-test budget.
+    for(let attempt=0;attempt<20&&traces.length<9;attempt++) {
+      await new Promise(r=>setTimeout(r,100));
+      traces=await(await observer.fetch('https://observer/')).json();
+    }
+    assert.ok(traces.length >= 9);
+    assert.ok(traces.every(t => t.method === 'handleMcpRequest' && t.outcome === 'ok'));
   } finally {for(const client of clients)await client.close();await mf.dispose();}
 });
