@@ -134,3 +134,40 @@ The quota reset is still at 00:00 UTC October 20 (20:00 EDT October 19).
 The existing 20:05 EDT post-reset verification should now expect this `.4`
 production version. This deployment check is pre-reset, not post-reset
 acceptance. No authentication, plan or kDrive file changes were made.
+
+## Post-reset verification — October 20, 00:10–00:11 UTC
+
+The scheduled check ran after the 00:00 UTC reset (October 19, 20:00 EDT).
+The clock was verified at 00:10:17 UTC; the read-only checks completed at
+approximately 20:10 EDT. Production remained build
+`4d0cb91f-8ad2-4d34-93e5-601af407a224`, capability `2026-10-19.4`.
+Both release CI run `39333806765` and evidence CI run `39334598304` were
+completed successfully. Git was clean before recording this check.
+
+| Check | Observed result |
+| --- | --- |
+| Connection status (one call) | Connected, expected build/revision |
+| Directory browsing (one call, limit 100) | 13 items, no continuation page |
+| Session transport diagnostic | JSON, memory-only, replay disabled |
+| MCP namespace rows written / read | 0 / 0 |
+| DO RPC invocations | 48 successful, 0 errors, 0 clientDisconnected |
+| Worker invocations | 91 successful, 0 errors, 0 client disconnects |
+
+The GraphQL filter window was October 20, 00:00–00:10 UTC. Returned telemetry
+contained a nonempty 00:05 five-minute bucket, and both invocation datasets
+identified the expected production build. Storage counts are independently
+measured namespace telemetry, not just the static transport diagnostic.
+Analytics ingestion and sampling still apply; these are observed counts in
+that window, not proof of every request or a quota billing reconciliation.
+
+A separate bounded 60-second sanitized live tail around the two requested
+checks captured 18 events, including six successful `handleMcpRequest` RPCs,
+zero canceled/disconnected RPCs and zero exceptions. Event timestamps were
+00:10:35–00:10:45 UTC, all on the expected build. Connection status completed
+in 383 ms; directory browsing completed in 588 ms. This live trace is separate
+from the earlier aggregate window; the counts should not be combined.
+
+All four requested health checks passed in the observed post-reset windows.
+There were no blockers. No deployment, configuration/plan changes, uploads,
+OCR inference or kDrive file mutations were performed. Cloudflare Free is
+unchanged. Only this local sanitized evidence record was updated.
