@@ -171,3 +171,49 @@ All four requested health checks passed in the observed post-reset windows.
 There were no blockers. No deployment, configuration/plan changes, uploads,
 OCR inference or kDrive file mutations were performed. Cloudflare Free is
 unchanged. Only this local sanitized evidence record was updated.
+
+## Next-day follow-up — October 20, 20:05–20:06 EDT
+
+UTC time was verified at October 21, 00:05:25, after the 00:00 UTC reset.
+The earlier October 20, 20:05 UTC scheduler trigger was four hours early;
+no health checks ran then. This was the corrected one-time check.
+Production remained `4d0cb91f-8ad2-4d34-93e5-601af407a224`, capability
+`2026-10-19.4`. The latest repository commit was `6353fa0`; the working tree
+was clean before recording this evidence.
+
+One connection-status call succeeded on the expected build. One directory
+listing with limit 100 succeeded with 11 items and no continuation page.
+The prior count was 13; this read-only check made no file changes and does
+not attribute the count change to a connector defect. Transport diagnostics
+remain JSON, memory-only, with response replay disabled.
+
+| Observed metric | Since previous check | After latest reset |
+| --- | ---: | ---: |
+| Session namespace rows written / read | 0 / 0 | Not yet available |
+| DO RPC successes | 165 | 5 |
+| DO RPC errors / clientDisconnected | 0 / 0 | 0 / 0 |
+| Worker invocations | 343 | 10 |
+| Worker errors / client disconnects | 0 / 0 | 0 / 0 |
+
+The since-check GraphQL window was October 20, 00:11 UTC through October 21,
+00:05 UTC. The fresh post-reset window was October 21, 00:00–00:06:37 UTC.
+All returned invocation groups identified the expected production build.
+The first 00:00–00:05 query returned no records in any dataset; the later
+bounded query returned invocation counts but still no periodic storage records.
+An empty storage dataset is unavailable evidence, not a measured zero. The
+static `session_sql_writes: 0` diagnostic does not replace that measurement.
+Sampling and ingestion delay apply to all aggregate counts, and the overlapping
+windows must not be added together.
+
+A separate 60-second sanitized live tail captured 17 events, including six
+successful internal RPCs, zero canceled/disconnected RPCs and zero exceptions,
+all on the expected build. Event timestamps were 00:05:44–00:05:57 UTC.
+Connection status completed in 360 ms and directory browsing in 772 ms.
+These direct observations confirm successful post-reset reads and RPC outcomes.
+
+No recurrence of session-write churn or RPC disconnects was observed in the
+available telemetry. The only verification limitation is that a separate fresh
+post-reset storage counter was not yet available. No further polling was done.
+Cloudflare Free is unchanged. No deployment, connector configuration changes,
+uploads or kDrive file mutations occurred. Only this sanitized local record
+was updated; no ongoing monitoring was created.
