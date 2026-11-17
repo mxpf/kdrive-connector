@@ -260,8 +260,9 @@ function jsonContent(value: unknown, options: { materializeLinks?: boolean } = {
     restore_from_trash: "Item restored.",
   };
   const items = Array.isArray(record.items) ? record.items : undefined;
+  const folder = operation === "list_directory" ? ` from ${JSON.stringify(record.folder)}` : "";
   const summary = items
-    ? `${items.length} ${operation === "search" ? "matching " : ""}items returned.${record.hasMore ? " More results available." : ""} Details are in structuredContent.`
+    ? `${items.length} ${operation === "search" ? "matching " : ""}${items.length === 1 ? "item" : "items"} returned${folder}.${record.hasMore ? " More results available." : ""} Details are in structuredContent.`
     : summaries[operation] ?? "kDrive operation completed.";
   // Lists keep links in structuredContent/UI only. Singular results get one open link.
   const links = items ? [] : collectOpenLinks(value).slice(0, 1);
@@ -581,11 +582,15 @@ export function registerKDriveTools(
     {
       title: "List a kDrive folder",
       description: "Preferred action to list a known or conventional kDrive folder: pass its full natural path directly without first enumerating ancestors or searching. In this deployment only, my Inbox means /Private/00 Inbox and Private means /Private. Always respect an explicit user-provided path; investigate alternatives only if the conventional folder is missing. Omit directoryPath for the root and pass cursor only to continue a prior page.",
-      inputSchema: {
+      inputSchema: z.strictObject({
         directoryPath: kdrivePath.optional().describe("Full natural folder path. In this deployment, my Inbox maps to /Private/00 Inbox and Private to /Private; an explicit user-provided path takes precedence. Omit only to list the root."),
         cursor: z.string().optional(),
         limit: z.number().int().min(5).max(1000).default(100),
-      },
+      }, {
+        error: issue => issue.code === "unrecognized_keys"
+          ? "Unknown folder listing argument. Use directoryPath for the folder, with optional cursor and limit."
+          : undefined,
+      }),
       outputSchema: {
         folder: z.string(),
         items: z.array(resultItemSchema),

@@ -101,3 +101,18 @@ problem. Existing paths and structured schemas are otherwise preserved.
 The live connector remains unchanged. After normal project deployment approval,
 refresh tool discovery and smoke-test text reads, listings, digest reads, and a
 separately authorized overwrite on a disposable test file.
+
+## Folder listing and recovery verification, 2026-11-17
+
+A live folder check returned the drive root after the caller supplied `path`.
+The listing tool takes `directoryPath`, and its previous input parser silently
+dropped unknown keys. The revised parser rejects them and names the correct
+argument. The single-line summary includes the resolved folder on each page.
+The MCP transport test covers an intentional root request, a named folder,
+and the mistaken argument alone or alongside a valid folder.
+
+A separate live check used one disposable text file. A prepared overwrite
+succeeded. An overwrite prepared against the preceding version was rejected,
+and a read confirmed the newer contents. Trash removed the path. Restore
+returned the expected 58 bytes with the SHA-256 calculated independently
+from the fixture text. The fixture was then moved to recoverable trash.

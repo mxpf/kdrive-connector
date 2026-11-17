@@ -29,12 +29,12 @@ test("missing PDF previews prefer direct connector extraction when identified as
 });
 function fixture(bytes = Buffer.from("hello"), server?: McpServer) {
   const file = { id: 2, path: "/Private/test.md", name: "test.md", type: "file", size: bytes.length, etag: "private-version" };
-  const folder = { id: 1, path: "/Private", name: "Private", type: "dir" };
+  const folder = { id: 100, path: "/Private", name: "Private", type: "dir" };
   const calls: string[] = [];
   let changed = false;
   const client = {
     resolvePath: async (_drive: number, path: string) => ({ ...(path === folder.path ? folder : file), ...(changed ? { etag: "new-version" } : {}) }),
-    getFile: async () => ({ ...file }),
+    getFile: async (_drive: number, id: number) => id === 1 ? { id: 1, path: "/", name: "", type: "dir" } : { ...file },
     download: async (_drive: number, _id: number, options: { maxBytes: number }) => {
       calls.push("download");
       assert.equal(options.maxBytes, 100_000);
@@ -166,7 +166,18 @@ test("MCP transport preserves canonical data without reintroducing text duplicat
     assert.ok(text(read).length < 250);
     const listing = await client.callTool({ name: "kdrive_list_directory", arguments: { directoryPath: "/Private" } }) as Result;
     assert.equal(listing.structuredContent?.items.length, 63);
+    assert.equal(listing.structuredContent?.folder, "/Private");
+    assert.match(text(listing), /from "\/Private"/);
     assert.ok(text(listing).length < 150);
+    const root = await client.callTool({ name: "kdrive_list_directory", arguments: {} }) as Result;
+    assert.equal(root.structuredContent?.folder, "/");
+    assert.match(text(root), /from "\/"/);
+    for (const args of [{ path: "/Private" }, { directoryPath: "/Private", path: "/Other" }]) {
+      const invalid = await client.callTool({ name: "kdrive_list_directory", arguments: args }) as Result;
+      assert.equal(invalid.isError, true);
+      assert.match(text(invalid), /directoryPath/);
+      assert.equal(invalid.structuredContent, undefined);
+    }
     const digest = await client.callTool({ name: "kdrive_digest_file", arguments: { path: f.file.path } }) as Result;
     assert.equal(digest.structuredContent?.algorithm, "sha256");
     assert.ok(!digest.isError);

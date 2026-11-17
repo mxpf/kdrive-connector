@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { z } from "zod";
 import { runInNewContext } from "node:vm";
 import { KDRIVE_SERVER_INSTRUCTIONS } from "../src/kdrive-instructions.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -75,7 +76,11 @@ test("public kDrive tool schemas expose paths but no IDs or ETags", async () => 
       definition: Record<string, unknown>,
       handler: (...args: unknown[]) => unknown,
     ) {
-      registrations.set(name, definition);
+      const schema = definition.inputSchema;
+      registrations.set(name, {
+        ...definition,
+        inputSchema: schema instanceof z.ZodObject ? schema.shape : schema,
+      });
       handlers.set(name, handler);
     },
   } as unknown as Pick<McpServer, "registerTool">;

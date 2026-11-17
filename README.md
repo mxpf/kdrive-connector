@@ -116,6 +116,12 @@ Callers needing links for every item can render those URLs when requested.
 Base64 reads retain their explicit attachment resource link. Text-only clients
 must consume structured results to obtain complete data.
 
+For a folder inventory, pass its path as `directoryPath` to `kdrive_list_directory`.
+Omitting it requests the root. Unknown arguments produce an error. The summary
+names the resolved folder and counts the items on the current page. Verify
+`folder` and follow each `cursor` with the same folder until `hasMore` is false
+before reporting the total.
+
 Use `kdrive_digest_file({ path })` for each candidate file and compare both
 `digest` and `byteLength`. The result declares `algorithm: "sha256"` and
 `digestEncoding: "base64url"`. It hashes original bytes, never converted text or

@@ -10,7 +10,7 @@ Use the kDrive MCP tools as a natural file workspace. Work entirely with paths a
 ## Choose the workflow
 
 - To find something, search by the user's words and narrow by a known folder path when useful. Use the returned preview to distinguish likely matches. If multiple plausible results remain, show concise paths or ask one short clarifying question.
-- To inspect a known location, list or read it by path.
+- To list a known folder, pass its full path as `directoryPath`. Check the returned `folder`. For a complete inventory, pass each continuation cursor with the same folder until `hasMore` is false before reporting a total.
 - For ordinary review and summarization, read text and reuse that result. Request a base64 read only when rendered pages or binary bytes are genuinely required, and do it once after selecting the exact file; this is the one path that may invoke the host's native file-download approval.
 - To create or upload, prefer a complete destination path. New files must use conflict-safe behavior unless the user explicitly asks for an automatically renamed copy.
 - To rename, move, replace, or trash, call `kdrive_prepare_change` internally and immediately follow it with the matching write tool using the returned operation token and identical readable arguments.
